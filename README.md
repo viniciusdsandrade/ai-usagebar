@@ -595,7 +595,9 @@ only when a tolerant reader could not safely absorb a change.
 `usage` (plain or `--json`) exits 0 after printing a complete document, even
 when every entry carries its own `error`. Non-zero means the command could not
 produce the document (missing or unreadable `--config`, unparseable TOML, no
-vendors enabled, or a runtime/bootstrap failure).
+vendors enabled, or a runtime/bootstrap failure). A script that wants
+"non-zero when something is unhealthy" gates on the payload instead:
+`ai-usagebar usage --json | jq -e 'all(.entries[]; .error == null)'`.
 
 `usage` reports only the providers that are **enabled**, which makes the
 switched-off and the never-credentialed exactly the rows it cannot describe.

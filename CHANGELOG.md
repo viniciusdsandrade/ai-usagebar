@@ -9,14 +9,16 @@ Each release is also published at
 
 ## [Unreleased]
 
-### Fixed
+### Changed
 
 - **`usage` exits 0 after printing a complete document.** Per-entry fetch or
   auth failures stay inside each entry's `error` field instead of making the
   command itself fail, so a script that captures `usage --json` still gets the
   diagnosis when every account is broken. Non-zero remains only when the
   document cannot be produced (missing or unreadable `--config`, unparseable
-  TOML, no vendors enabled, or a runtime/bootstrap failure). (#217)
+  TOML, no vendors enabled, or a runtime/bootstrap failure). Scripts that
+  treated "every entry failed" as command failure now get 0 and should gate on
+  `.entries[].error` instead. (#217)
 
 ## [1.20.1] — 2026-09-18
 
