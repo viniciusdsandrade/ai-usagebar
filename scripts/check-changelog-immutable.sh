@@ -22,7 +22,19 @@ fail=0
 tags=$(git tag --list 'v*' --sort=-v:refname | head -"${CHANGELOG_TAGS_TO_CHECK:-8}")
 [ -z "$tags" ] && { echo "no v* tags found — nothing to compare"; exit 0; }
 
+# Tags whose release never published: the tag exists, but no GitHub Release
+# ever carried it, so its entries were folded into the next version's section
+# and the section is legitimately absent from HEAD. v1.20.0 was tagged with a
+# stale Scoop manifest version; verify-version refused to ship it, and
+# [1.20.1] carries its entries (its own Fixed entry says "that tag remains
+# unused"). Restoring the section instead would duplicate every entry under
+# two versions and trip the in-tree duplicate-entry guard in `make test`.
+folded_tags=" v1.20.0 "
+
 for tag in $tags; do
+  case "$folded_tags" in
+    *" $tag "*) continue ;;
+  esac
   v=${tag#v}
   a=$(git show "$tag:CHANGELOG.md" 2>/dev/null | sed -n "/^## \[$v\]/,/^## \[/p")
   b=$(sed -n "/^## \[$v\]/,/^## \[/p" CHANGELOG.md)
@@ -47,7 +59,11 @@ newest=$(git tag --list 'v*' --sort=-v:refname | head -1)
 if [ -n "$newest" ]; then
   want=${newest#v}
   check_version() {
-    got=$(sed -n "0,/$2/s//\1/p" "$1")
+    # A plain whole-file substitution, first match wins. The previous
+    # `0,/$2/s//\1/p` form is GNU-only: BSD sed (macOS, where the maintainer
+    # runs the gate) matches nothing and every version file reported as
+    # unreadable.
+    got=$(sed -n "s/$2/\1/p" "$1" | head -n 1)
     [ -z "$got" ] && { echo "error: could not read a version from $1"; fail=1; return; }
     # A release PR bumps past the tag and must pass; going backwards must not.
     if [ "$(printf '%s\n%s\n' "$want" "$got" | sort -V | head -1)" != "$want" ]; then

@@ -20,6 +20,18 @@ Each release is also published at
   treated "every entry failed" as command failure now get 0 and should gate on
   `.entries[].error` instead. (#217)
 
+### Fixed
+
+- **`make changelog-check` is green again and runs on macOS.** v1.20.0 was
+  tagged but never shipped (the Scoop manifest still carried the old
+  version), and [1.20.1] folded its entries — the guard read the missing
+  `[1.20.0]` section as the merge-deletion hazard it exists for, so the
+  ubuntu CI job has failed on every commit since. The script now carries an
+  explicit list of never-shipped tags whose sections were folded into the
+  next release. Its version-file check also used a GNU-only `sed` form that
+  matches nothing on BSD sed, reporting every version file as unreadable on
+  macOS; the extraction is now portable.
+
 ## [1.20.1] — 2026-09-18
 
 ### Added
