@@ -118,6 +118,9 @@ pub fn has_local_credentials(vendor: VendorId, config: &Config) -> bool {
         VendorId::ModelStudio => crate::modelstudio::config_path(&config.modelstudio)
             .map(|path| crate::modelstudio::creds::config_present_at(&path))
             .unwrap_or(false),
+        VendorId::MuseCode => crate::muse::creds::path(&config.muse)
+            .map(|path| path.is_file())
+            .unwrap_or(false),
         VendorId::Devin => crate::devin::credentials_path(&config.devin)
             .map(|path| path.is_file())
             .unwrap_or(false),
@@ -300,7 +303,7 @@ pub struct DetectReport {
 /// The pure decision. Candidates are `all` minus `state.known`, or every
 /// vendor in `all` when `force`. A candidate is enabled when `probe` says it
 /// has credentials and the config doesn't already enable it. A vendor that is
-/// not [`VendorId::auto_detectable`] (Devin) is neither probed nor counted:
+/// not [`VendorId::auto_detectable`] (Devin, Muse Code) is neither probed nor counted:
 /// its credentials are discoverable, but it is opt-in and detection, including
 /// `--all`, must not activate it. `known` becomes the union of the old set and
 /// `all`, in [`VendorId::all`] order, deduped — so a vendor is considered once
@@ -557,11 +560,8 @@ mod tests {
             assert!(!probed_vendors.borrow().contains(&VendorId::Devin));
             assert!(plan.known.contains(&VendorId::Devin));
         }
-        assert!(
-            VendorId::all()
-                .iter()
-                .all(|vendor| vendor.auto_detectable() == (*vendor != VendorId::Devin))
-        );
+        assert!(VendorId::all().iter().all(|vendor| vendor.auto_detectable()
+            == !matches!(vendor, VendorId::Devin | VendorId::MuseCode)));
     }
 
     #[test]

@@ -3,6 +3,12 @@
 Use placeholders with `--format` and `--tooltip-format`. Unsupported or absent
 metrics expand to an empty string unless noted otherwise.
 
+Muse Code (`--vendor muse-code`, short name `msc`) supplies `{muse_plan}`,
+`{muse_session_pct}`, `{muse_session_reset}`, `{muse_weekly_pct}`, and
+`{muse_weekly_reset}`, plus the generic `{plan}`, `{vendor_short}`,
+`{session_pct}`, `{session_reset}`, `{weekly_pct}`, and `{weekly_reset}`.
+Percentages are used allowance; an omitted window expands to an empty string.
+
 ## Cross-provider formats
 
 `{vendor_short}` identifies the active provider:
@@ -22,6 +28,7 @@ metrics expand to an empty string unless noted otherwise.
 | OpenCode Go | `ocg` | Command Code | `cmc` |
 | Ollama Cloud | `oll` | SuperGrok | `sgk` |
 | Devin | `dvn` | Cline | `cln` |
+| Muse Code | `msc` | | |
 
 The same codes ride the `ai-usagebar usage --json` report as each entry's
 `short_name`, so a native frontend can draw a Waybar-style provider tag without

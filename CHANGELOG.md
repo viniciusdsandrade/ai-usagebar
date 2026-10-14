@@ -1,5 +1,34 @@
 ## [Unreleased]
 
+## [1.37.0] — 2026-10-14
+
+### Added
+
+- **Muse Code subscription quota** (`[muse-code]`, `--vendor muse-code`):
+  session and weekly allowance percentages with resets, obtained through the
+  official CLI's existing file-based OAuth login. Requests are bounded to one
+  attempt per login every five minutes, including forced refreshes and failures;
+  credentials are never refreshed or rewritten and returned inference keys are
+  discarded. Missing/expired quota is unknown, with previous observations
+  marked stale. The Omarchy bar and panel use Meta's infinity mark. Existing
+  `[[custom]] id = "muse"` configurations stay valid.
+
+### Fixed
+
+- **Cline compact bar icon uses short name.** `VendorId::Cline.bar_icon()`
+  now returns `"cln"` via `short_name()` rather than the full five-letter
+  string `"Cline"`, matching all other providers without distinct Nerd Font marks.
+
+- **Cline catalog status probes credentials hermetically.** The vendor
+  catalog check for Cline CLI credentials now uses an injected probe on
+  `Probes` instead of directly calling filesystem operations in
+  `credential_present`, maintaining hermetic test isolation.
+
+- **macOS menu bar parses Cline rolling quota windows.** The Swift dropdown
+  menu and menubar item now parse Cline's 5-hour, weekly, and monthly rate-limit
+  windows into the primary, weekly, and third quota rows with proper labels,
+  falling back gracefully for older CLI binaries and unquoted plans.
+
 ## [1.36.0] — 2026-10-12
 
 ### Added
@@ -4319,7 +4348,8 @@ vendors. Highlights:
 - Live API smoke test suite (`make smoke`) that exercises the real
   undocumented endpoints to detect schema drift before users do.
 
-[Unreleased]: https://github.com/akitaonrails/ai-usagebar/compare/v1.36.0...HEAD
+[Unreleased]: https://github.com/akitaonrails/ai-usagebar/compare/v1.37.0...HEAD
+[1.37.0]: https://github.com/akitaonrails/ai-usagebar/compare/v1.36.0...v1.37.0
 [1.36.0]: https://github.com/akitaonrails/ai-usagebar/compare/v1.35.0...v1.36.0
 [1.35.0]: https://github.com/akitaonrails/ai-usagebar/compare/v1.34.0...v1.35.0
 [1.34.0]: https://github.com/akitaonrails/ai-usagebar/compare/v1.33.0...v1.34.0
