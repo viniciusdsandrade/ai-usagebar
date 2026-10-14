@@ -21,7 +21,7 @@ metrics expand to an empty string unless noted otherwise.
 | Kiro CLI | `kir` | Nous Research | `nrs` |
 | OpenCode Go | `ocg` | Command Code | `cmc` |
 | Ollama Cloud | `oll` | SuperGrok | `sgk` |
-| Devin | `dvn` | | |
+| Devin | `dvn` | Cline | `cln` |
 
 The same codes ride the `ai-usagebar usage --json` report as each entry's
 `short_name`, so a native frontend can draw a Waybar-style provider tag without
@@ -499,3 +499,12 @@ is `—`. See [ollama-setup.md](ollama-setup.md).
 balance values returned by Lyceum, formatted with `$` and two decimal places.
 Lyceum reports no quota percentage or reset, so the shared session/weekly
 percentage placeholders are empty and reset placeholders are neutral.
+
+## Cline
+
+`{cline_5h_pct}`, `{cline_5h_reset}`, `{cline_7d_pct}`, `{cline_7d_reset}`,
+`{cline_30d_pct}`, and `{cline_30d_reset}` carry the three ClinePass limits as
+the percentage Cline reports and each open window's reset; `{cline_plan}` is
+the plan name and `{cline_period_end}` the billing period's end. A limit the
+account does not report leaves its placeholders empty rather than guessing a
+figure.

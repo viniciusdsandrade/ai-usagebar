@@ -1,5 +1,63 @@
 ## [Unreleased]
 
+## [1.36.0] — 2026-10-12
+
+### Added
+
+- **Cline (ClinePass)** as a vendor: the three limits ClinePass meters —
+  5 hours, weekly, monthly — read as the percentage Cline itself reports from
+  the dashboard's `usage-limits` route (undocumented, the same calls the web
+  dashboard and the official `cline` CLI make), with the reset time of each
+  open window; the plan's billing period comes from the documented
+  `/api/v1/users/me/plan`. Enable `[cline]`; the credential is the one the
+  `cline` CLI already holds, and is only ever read — an expired token is
+  flagged, never refreshed (refreshing would sign the CLI out), and a blank
+  token is a credentials error naming `cline auth`. Figures are the server's
+  own percentages: no usage is re-derived from the charge ledger, and anything
+  outside the reported shape is schema drift, never a silent 0%.
+
+
+- **Prepare an inactive Claude Desktop account without switching to it (macOS).**
+  A Desktop account's card gains a Prepare action that opens the account's
+  5-hour window server-side: one short turn with the profile's token in an
+  isolated temporary home (no tools, MCP, history persistence, or project
+  context; the directory is deleted afterward). The app is neither switched
+  nor restarted. Contributed by GuohuaQiu1999 as the prepare half of #392;
+  the switch half shipped separately in v1.35.0.
+### Changed
+
+- **TUI tabs follow `[ui] overview_vendors`.** Listed vendors lead the sidebar
+  in that order. Enabled vendors left off the list keep the canonical order
+  after them. The Overview tab still lists only the named vendors.
+  `usage --json` includes `overview_vendors` when the list is set, including
+  an empty list, and omits the field otherwise. `entries` follow the tab
+  order, so a consumer that renders the payload in order follows the list
+  too. Frontends keep a repeated slug's first occurrence. The Linux Mint dashboard
+  reads that field instead of `config.toml`. When the field is absent it
+  still leads with `primary`; an empty list does not.
+
+### Fixed
+
+- **Linux Mint dashboard opens on Wayland.** Asking an X11 server time no
+  longer crashes when WSLg (or any Wayland session) hands back a Wayland
+  window.
+
+
+- **Cursor usage requests send the full browser header set.** cursor.com sits
+  behind Vercel's WAF, which negotiates client hints and denies
+  automated-looking TLS fingerprints outright, so a risk-based 403 appeared as
+  "authentication rejected" on a session cookie the same request accepted from
+  curl. The summary call now sends the complete header set a browser sends,
+  and a 403 reads as "authentication failed or an edge block" instead of
+  blaming the credentials (#410).
+
+- **Antigravity can skip the IDE's language server in discovery.** With the
+  Antigravity IDE open but signed out, its language server answered an
+  actionable 403 that masked the working `agy` saved-session fallback (#405).
+  `[antigravity] ide_language_server = false` excludes IDE-owned candidates
+  before any probe, so the fallback answers exactly as if the IDE were closed.
+  The default keeps today's discovery; an explicit `ANTIGRAVITY_LS_ADDRESS` is
+  never skipped. A no-op on Windows (the IDE cannot be told apart by filename).
 ## [1.35.0] — 2026-10-11
 
 ### Added
@@ -2394,7 +2452,6 @@
   still names the buckets it did receive. `docs/vendor-endpoints.md` gains the
   Antigravity row it never had — it was the only provider missing from that
   table — and the placeholder reference no longer promises all four windows.
-
 ## [1.9.1] — 2026-08-30
 
 ### Fixed
@@ -4262,7 +4319,8 @@ vendors. Highlights:
 - Live API smoke test suite (`make smoke`) that exercises the real
   undocumented endpoints to detect schema drift before users do.
 
-[Unreleased]: https://github.com/akitaonrails/ai-usagebar/compare/v1.35.0...HEAD
+[Unreleased]: https://github.com/akitaonrails/ai-usagebar/compare/v1.36.0...HEAD
+[1.36.0]: https://github.com/akitaonrails/ai-usagebar/compare/v1.35.0...v1.36.0
 [1.35.0]: https://github.com/akitaonrails/ai-usagebar/compare/v1.34.0...v1.35.0
 [1.34.0]: https://github.com/akitaonrails/ai-usagebar/compare/v1.33.0...v1.34.0
 [1.33.0]: https://github.com/akitaonrails/ai-usagebar/compare/v1.32.0...v1.33.0
