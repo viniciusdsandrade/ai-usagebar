@@ -1,5 +1,46 @@
 ## [Unreleased]
 
+## [1.38.0] — 2026-10-15
+
+### Added
+
+- **GNOME: several providers in the top bar.** The extension adds one
+  indicator per provider switched on under **Top bar vendors** (one switch per
+  provider, replacing the single-choice dropdown), side by side and each led by
+  the provider's brand icon. The `vendor` setting now holds a comma-separated
+  list; an existing single id keeps working unchanged.
+- **GNOME: pace arrows.** A new **Pace arrows** option (`show-pace`, off by
+  default) applies when bars are off: each value is colored by usage minus
+  elapsed, on the same point-delta bands as the bar's pace marker, and followed
+  by `↓` (more than 10 points under), `→` (within 10 under) or `↑` (ahead).
+  With it off, bars-off still shows plain percentages.
+
+### Fixed
+
+- **SuperGrok's usage row names its reset in the TUI and the report.** The
+  overall meter carried no footnote, so the TUI, `usage` and `usage --json`
+  showed a bare percentage where Claude and Grok Bot add `Resets in …`. A
+  weekly period now carries the countdown with its pace, a monthly or unknown
+  period the countdown alone, and a response without a reset still carries
+  nothing (#418).
+
+- **Antigravity reads its saved session from KDE's keyring.** go-keyring
+  stores the session with content type `text/plain; charset=utf8`, and
+  `secret-tool lookup` prints only an exact `text/plain` value, so on KDE's
+  ksecretd the lookup exited 1 and the closed-app fallback reported no
+  session. When `lookup` fails, the value is now read from `secret-tool
+  search`, which prints it whatever its content type (#419).
+
+- **GNOME preferences: the first tab is titled again, and the Pools subtitle no
+  longer shows a literal `&amp;`.** The first preferences page was constructed
+  without a title (it renders as an unlabeled tab beside "Vendors"), and a
+  subtitle wrapped in `GLib.markup_escape_text` showed the entity raw — markup
+  is off on those rows (#422).
+- **GNOME: switching every top-bar vendor off now hides them all.** The panel
+  used to fall back to Anthropic when the vendor list was empty, so prefs said
+  all off while the bar still showed it. And with no windows to draw, the empty
+  bar no longer shows the brand mark twice.
+
 ## [1.37.0] — 2026-10-14
 
 ### Added
@@ -4348,7 +4389,8 @@ vendors. Highlights:
 - Live API smoke test suite (`make smoke`) that exercises the real
   undocumented endpoints to detect schema drift before users do.
 
-[Unreleased]: https://github.com/akitaonrails/ai-usagebar/compare/v1.37.0...HEAD
+[Unreleased]: https://github.com/akitaonrails/ai-usagebar/compare/v1.38.0...HEAD
+[1.38.0]: https://github.com/akitaonrails/ai-usagebar/compare/v1.37.0...v1.38.0
 [1.37.0]: https://github.com/akitaonrails/ai-usagebar/compare/v1.36.0...v1.37.0
 [1.36.0]: https://github.com/akitaonrails/ai-usagebar/compare/v1.35.0...v1.36.0
 [1.35.0]: https://github.com/akitaonrails/ai-usagebar/compare/v1.34.0...v1.35.0
