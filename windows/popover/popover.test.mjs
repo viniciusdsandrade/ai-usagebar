@@ -6,6 +6,7 @@ import {
   formatDuration,
   nextUpdateLabel,
   parseHostPayload,
+  providerState,
   projectCards,
   resetLabel,
   friendlyError,
@@ -848,6 +849,7 @@ assert.equal(resetAlternate(badStampRow, 'exact', resetNow, utc), '');
   assert.equal(parseHostPayload({ refresh_minutes: 10 }).refreshMinutes, 10);
   assert.equal(parseHostPayload({ refresh_minutes: 1 }).refreshMinutes, 1);
   assert.equal(parseHostPayload({ refresh_minutes: 7 }).refreshMinutes, 5);
+  assert.equal(parseHostPayload({ refresh_minutes: 60 }).refreshMinutes, 60);
   assert.equal(parseHostPayload({ refresh_minutes: '10' }).refreshMinutes, 10);
   assert.equal(parseHostPayload({ refresh_minutes: 'often' }).refreshMinutes, 5);
   assert.equal(parseHostPayload({}).refreshMinutes, 5);
@@ -1633,6 +1635,85 @@ assert.equal(resolvedTheme('system'), 'light');
   assert.equal(stripCommand({ ...seeded, showAs: 'sideways' }, cards).show_as, 'left');
 }
 
+// --- stars for providers that arrive late, and stars taken off on purpose (#437) --
+
+{
+  // ARRANGE: Claude was starred on first launch; Antigravity was enabled later
+  const payload = parseHostPayload({
+    entries: [
+      { id: 'anthropic', display_name: 'Claude', sections: [
+        { type: 'metric', label: 'Session', percent: 41 },
+        { type: 'metric', label: 'Weekly', percent: 19 },
+      ] },
+      { id: 'antigravity', display_name: 'Antigravity', sections: [
+        { type: 'text', label: 'Session', value: '' },
+        { type: 'metric', label: 'Gemini', percent: 0 },
+        { type: 'text', label: 'Weekly', value: '' },
+        { type: 'metric', label: 'Gemini', percent: 95 },
+      ] },
+    ],
+  });
+  const cards = projectCards(payload, 0);
+  const remembered = { ...emptyLayout(), stars: { anthropic: ['metric:Weekly'] } };
+
+  // ACT
+  const seeded = seedStars(remembered, cards);
+
+  // ASSERT: the newcomer gets its defaults and reaches the strip; the remembered
+  // choice is untouched, and with nothing left to seed the same layout comes back
+  assert.deepEqual(seeded.stars.anthropic, ['metric:Weekly']);
+  assert.deepEqual(seeded.stars.antigravity, ['metric:Gemini (Session)', 'metric:Gemini (Weekly)']);
+  assert.deepEqual(stripCommand(seeded, cards).stars.antigravity, ['metric:Gemini (Session)', 'metric:Gemini (Weekly)']);
+  assert.equal(seedStars(seeded, cards), seeded);
+}
+
+{
+  // ARRANGE: two starred providers
+  const payload = parseHostPayload({
+    entries: [
+      { id: 'anthropic', display_name: 'Claude', sections: [{ type: 'metric', label: 'Weekly', percent: 19 }] },
+      { id: 'openai', display_name: 'Codex', sections: [{ type: 'metric', label: 'Codex weekly', percent: 2 }] },
+    ],
+  });
+  const cards = projectCards(payload, 0);
+  const start = seedStars(emptyLayout(), cards);
+  assert.deepEqual(start.stars.openai, ['metric:Codex weekly']);
+
+  // ACT: the user unstars Codex's only metric
+  const off = { ...start, stars: toggleStar(start.stars, 'openai', 'metric:Codex weekly').stars };
+
+  // ASSERT: an explicit empty list that seeding, storage, sync and the strip respect
+  assert.deepEqual(off.stars.openai, []);
+  assert.equal(seedStars(off, cards), off);
+  const restored = normalizeLayout(JSON.parse(JSON.stringify(off)));
+  assert.deepEqual(restored.stars.openai, []);
+  assert.equal(seedStars(restored, cards), restored);
+  assert.deepEqual(syncLayout(restored, ['anthropic', 'openai']).stars.openai, []);
+  assert.deepEqual(stripCommand(off, cards).stars, { anthropic: ['metric:Weekly'] });
+}
+
+{
+  // ARRANGE: Antigravity's entry id switches as agy statusline sessions come and go
+  const entriesFor = (id) => [
+    { id: 'anthropic', display_name: 'Claude', sections: [{ type: 'metric', label: 'Weekly', percent: 19 }] },
+    { id, display_name: 'Antigravity', sections: [{ type: 'metric', label: 'Gemini', percent: 95 }] },
+  ];
+  const step = (layout, id) => {
+    const payload = parseHostPayload({ entries: entriesFor(id) });
+    return seedStars(absorbPayload(layout, payload.entries), projectCards(payload, 0));
+  };
+
+  // ACT: the plain id, then a per-account one, then the plain id again
+  const first = step(emptyLayout(), 'antigravity');
+  const perAccount = step(first, 'antigravity@abc123');
+  const back = step(perAccount, 'antigravity');
+
+  // ASSERT: whichever id the report uses is starred, so the strip never drops it
+  assert.deepEqual(first.stars.antigravity, ['metric:Gemini']);
+  assert.deepEqual(perAccount.stars['antigravity@abc123'], ['metric:Gemini']);
+  assert.deepEqual(back.stars.antigravity, ['metric:Gemini']);
+}
+
 {
   const payload = parseHostPayload({
     entries: [
@@ -1973,4 +2054,52 @@ console.log('ok');
   assert.equal(accountSwitchFor('anthropic@two', payload.accounts).preparing, true);
   assert.equal(accountSwitchFor('anthropic@one', payload.accounts).busy, true);
   assert.equal(accountSwitchFor('anthropic@one', payload.accounts).active, true);
+}
+
+// --- provider catalog (Settings → Providers) ---------------------------------
+{
+  const payload = parseHostPayload(JSON.stringify({
+    entries: [{ id: 'custom:mine', brand: 'opencode-go', display_name: 'Mine', sections: [] }],
+    providers_error: 'Could not write',
+    providers: [
+      { id: 'cursor', name: 'Cursor', enabled: false, configured: true, env: '', sign_in: 'Sign in to the Cursor app, then Refresh.', action: 'app', add_accounts: ['codex', 'bogus'] },
+      { id: 'zai', name: 'Z.AI', enabled: true, configured: false, env: 'ZAI_API_KEY', sign_in: 'Add an API key', action: 'settings' },
+      { id: 'kiro', name: 'Kiro', enabled: true, configured: true, action: 'rm -rf' },
+      { id: '', name: 'nameless' },
+      'junk',
+    ],
+  }));
+  assert.deepEqual(payload.providers.map((p) => p.id), ['cursor', 'zai', 'kiro']);
+  assert.equal(payload.providers[2].action, '', 'unknown actions are dropped');
+  assert.deepEqual(payload.providers[0].addAccounts, ['codex']);
+  assert.deepEqual(payload.providers[1].addAccounts, []);
+  assert.equal(payload.providersError, 'Could not write');
+  assert.deepEqual(payload.providers.map(providerState), ['off-ready', 'needs', 'ready']);
+  assert.equal(providerState({ enabled: false, configured: false }), 'off');
+  assert.deepEqual(parseHostPayload('{}').providers, []);
+  // A custom provider that declares a brand draws that brand's mark.
+  assert.equal(projectCards(payload, 0, 'en')[0].icon, 'opencode-go');
+}
+
+// --- capped text rows become meters --------------------------------------------
+{
+  const payload = parseHostPayload(JSON.stringify({ entries: [{ id: 'cursor', sections: [
+    { type: 'text', label: 'On-Demand', value: '$12.00 / $10.00', used_cents: 1200, limit_cents: 1000, percent: 120, severity: 'critical' },
+    { type: 'text', label: 'Plan', value: 'Pro' },
+  ] }] }));
+  const [meter, plain] = payload.entries[0].sections;
+  assert.equal(meter.type, 'metric');
+  assert.equal(meter.percent, 100);
+  assert.equal(meter.headline, 'value');
+  assert.equal(meter.value, '$12.00 / $10.00');
+  assert.equal(meter.severity, 'critical');
+  assert.equal(plain.type, 'text');
+}
+
+// --- stale cards know how old their payload is -------------------------------------
+{
+  const payload = parseHostPayload(JSON.stringify({ entries: [{ id: 'zai', stale: true, fetched_at: '2026-10-16T12:00:00Z', sections: [] }, { id: 'kiro', fetched_at: null, sections: [] }] }));
+  const [stale, fresh] = projectCards(payload, 0, 'en');
+  assert.equal(stale.fetchedAt, Date.parse('2026-10-16T12:00:00Z'));
+  assert.equal(fresh.fetchedAt, 0);
 }

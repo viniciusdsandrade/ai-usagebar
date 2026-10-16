@@ -43,7 +43,7 @@ use super::browse;
 use super::hotkey::{self, HotkeyBinding};
 use super::icon::{Severity, tray_icon_rgba};
 use super::marks;
-use super::menu_bar::{self, LogoSegment, MenuBarLook, StatusItemContent, UsageReading};
+use super::menu_bar::{self, LogoSegment, MenuBarLook, StatusItemContent};
 use super::options_menu::{self, OptionsAction, OptionsLabels};
 use super::panel::{
     CLICK_LOCK_MS, CORNER_RADIUS, CocoaRect, FALLBACK_WORK_AREA_HEIGHT, PopoverPlacement,
@@ -54,8 +54,8 @@ use super::payload::{
     wrap_report,
 };
 use super::strip::{
-    BARS_PIXEL_SIDE, BARS_POINT_SIDE, HiddenRows, Stars, bar_fill, bars_layout, bars_rgba,
-    content_from_payload, parse_hidden_rows, parse_strip_ipc,
+    BARS_PIXEL_SIDE, BARS_POINT_SIDE, HiddenRows, Stars, UsageReading, bar_fill, bars_layout,
+    bars_rgba, content_from_payload, parse_hidden_rows, parse_strip_ipc, tooltip,
 };
 use super::style::PopoverStyle;
 use super::updates::Updates;
@@ -86,8 +86,12 @@ enum UserEvent {
 
 enum WorkerCmd {
     Refresh,
+    /// Re-read the provider catalog alone, without a report.
+    Providers,
     Detect,
-    CheckUpdate { manual: bool },
+    CheckUpdate {
+        manual: bool,
+    },
     InstallUpdate,
     SnoozeUpdate,
     SetUpdates(UpdateMode),
@@ -384,6 +388,12 @@ fn spawn_worker(
                     let wait = deadline.saturating_duration_since(Instant::now());
                     match rx.recv_timeout(wait) {
                         Ok(WorkerCmd::Refresh) | Err(mpsc::RecvTimeoutError::Timeout) => break,
+                        Ok(WorkerCmd::Providers) => {
+                            if let Some(providers) = super::providers::take_due() {
+                                with_facts(&facts, |f| f.providers = providers);
+                                let _ = proxy.send_event(UserEvent::Facts);
+                            }
+                        }
                         Ok(WorkerCmd::Detect) => {
                             run_detection(true);
                             break;
@@ -549,6 +559,10 @@ async fn push_report(proxy: &EventLoopProxy<UserEvent>, facts: &SharedFacts) {
     refresh_account_facts(facts);
     let mut snapshot = facts_snapshot(facts);
     snapshot.startup_enabled = startup::is_enabled();
+    if let Some(providers) = super::providers::take_due() {
+        with_facts(facts, |f| f.providers.clone_from(&providers));
+        snapshot.providers = providers;
+    }
     let now = now_ms();
     let payload = match crate::report::collect_json().await {
         Ok(json) => wrap_report(&json, &snapshot, now, None),
@@ -582,6 +596,8 @@ fn stamp_facts(state: &mut TrayState) {
         "repository",
         "version",
         "accounts",
+        "providers",
+        "providers_error",
     ] {
         obj.insert(key.into(), stamped[key].clone());
     }
@@ -596,8 +612,8 @@ fn apply_facts(state: &mut TrayState) {
 
 fn apply_strip_icon(state: &mut TrayState) {
     let content = content_from_payload(&state.payload, &state.stars, &state.strip_order);
-    let tooltip = menu_bar::tooltip(&content, state.usage_reading);
-    let _ = state.tray.set_tooltip(Some(tooltip.as_str()));
+    let tooltip_text = tooltip(&content, state.usage_reading);
+    let _ = state.tray.set_tooltip(Some(tooltip_text.as_str()));
     state.tray.set_title(Some(""));
     let segments = menu_bar::logo_segments(
         &content,
@@ -849,6 +865,7 @@ fn handle_menu(state: &mut TrayState, event: &MenuEvent, control_flow: &mut Cont
             let _ = state.worker.send(WorkerCmd::Refresh);
         }
         OptionsAction::Detect => {
+            super::providers::request();
             let _ = state.worker.send(WorkerCmd::Detect);
         }
         OptionsAction::OpenTui => tui_launch::open(),
@@ -1033,11 +1050,27 @@ fn handle_ipc(state: &mut TrayState, body: &str, control_flow: &mut ControlFlow)
             }
         }
         "detect" => {
+            super::providers::request();
             let _ = state.worker.send(WorkerCmd::Detect);
+        }
+        "providers" => {
+            super::providers::request();
+            let _ = state.worker.send(WorkerCmd::Providers);
         }
         "refresh" => {
             let _ = state.worker.send(WorkerCmd::Refresh);
         }
+        "set-provider-enabled" => {
+            let error = super::providers::set_enabled(&value)
+                .err()
+                .unwrap_or_default();
+            super::providers::request();
+            with_facts(&state.facts, |f| f.providers_error = error);
+            apply_facts(state);
+            let _ = state.worker.send(WorkerCmd::Refresh);
+        }
+        "sign-in-provider" => super::providers::sign_in(&value),
+        "add-account" => super::providers::add_account(&value),
         "open-tui" => tui_launch::open(),
         "close" => hide_popover(state),
         "quit" => *control_flow = ControlFlow::Exit,

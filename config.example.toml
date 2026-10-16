@@ -11,7 +11,7 @@
 # Valid: anthropic | anthropic_api | openai | copilot | zai | openrouter | deepseek
 #        | kimi | kilo | novita | moonshot | grok | supergrok | grokbot | antigravity
 #        | cursor | minimax | kiro | nous | opencode-go | commandcode | ollama
-#        | orcarouter | modelstudio | lyceum | devin | cline | muse-code
+#        | orcarouter | modelstudio | lyceum | devin | cline | muse-code | synthetic
 # When unset, the TUI opens on the Overview (all vendors at once); set this to
 # open directly on a vendor's tab instead.
 # primary = "anthropic"
@@ -74,7 +74,7 @@
 # Command and Option keys are accepted as Cmd/Command and Option, and shown as
 # Cmd/Option.
 # shortcut = "Ctrl+Shift+U"
-# How often the tray re-reads every provider: 1, 5 or 10 minutes; the panel's
+# How often the tray re-reads every provider: 1, 5, 10, 15, 30 or 60 minutes; the panel's
 # Refresh button is always immediate.
 # refresh_minutes = 5
 # New releases: auto (download, verify and restart unattended) | notify
@@ -396,6 +396,13 @@ api_key_env = "NOVITA_API_KEY"     # checked first; if set + non-empty, used
 # api_key = "..."                  # fallback; chmod 600 the file if you use it
 # display_limit = 200              # tank size in USD; see the group note above
 # headline = "amount"              # "amount" | "percent"
+
+[synthetic]
+# Disabled by default. Reads the documented subscription request quota from
+# https://api.synthetic.new/v2/quotas.
+enabled = false
+api_key_env = "SYNTHETIC_API_KEY"
+# api_key = "..."                  # fallback; chmod 600 the file if used
 
 [lyceum]
 # Disabled by default; this reads only the credits endpoint, not inference.

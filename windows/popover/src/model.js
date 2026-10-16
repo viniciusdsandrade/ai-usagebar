@@ -56,6 +56,8 @@ export function emptyPayload(hostError) {
     updateCheckedAt: 0,
     repository: "",
     accounts: {},
+    providers: [],
+    providersError: "",
     accent: null,
   };
 }
@@ -105,6 +107,8 @@ function normalizePayload(parsed) {
     updateCheckedAt: finiteNumber(parsed.update_checked_at),
     repository: githubPage(parsed.repository),
     accounts: normalizeAccounts(parsed.accounts),
+    providers: normalizeProviders(parsed.providers),
+    providersError: clean(parsed.providers_error, 300),
     accent: normalizeAccent(parsed.accent),
   };
 }
@@ -115,6 +119,38 @@ function normalizeAccent(value) {
   const color = /^#[0-9a-f]{6}$/i;
   if (!color.test(value.light) || !color.test(value.dark)) return null;
   return { light: value.light.toLowerCase(), dark: value.dark.toLowerCase() };
+}
+
+const SIGN_IN_ACTIONS = ["terminal", "app", "settings"];
+const ADD_ACCOUNT_KINDS = ["code", "desktop", "codex"];
+
+// Every built-in provider from the host's catalog (Settings → Providers).
+// The host owns names, hints and actions; this only bounds and types them.
+function normalizeProviders(value) {
+  if (!Array.isArray(value)) return [];
+  const out = [];
+  for (const raw of value.slice(0, MAX_ENTRIES)) {
+    if (!isPlainObject(raw)) continue;
+    const id = clean(raw.id, 64).trim();
+    if (!id) continue;
+    out.push({
+      id,
+      name: clean(raw.name, 120) || id,
+      enabled: raw.enabled === true,
+      configured: raw.configured === true,
+      env: clean(raw.env, 120),
+      signIn: clean(raw.sign_in, 200),
+      action: SIGN_IN_ACTIONS.includes(raw.action) ? raw.action : "",
+      addAccounts: Array.isArray(raw.add_accounts) ? ADD_ACCOUNT_KINDS.filter((kind) => raw.add_accounts.includes(kind)) : [],
+    });
+  }
+  return out;
+}
+
+/** "off" | "off-ready" (credential found) | "ready" | "needs" (enabled, not signed in). */
+export function providerState(provider) {
+  if (!provider.enabled) return provider.configured ? "off-ready" : "off";
+  return provider.configured ? "ready" : "needs";
 }
 
 const SWITCHABLE_VENDORS = ["anthropic", "openai", "claude-desktop"];
@@ -225,7 +261,7 @@ function windowSeconds(value) {
   return secs > 0 ? secs : 0;
 }
 
-const REFRESH_MINUTES = [1, 5, 10];
+const REFRESH_MINUTES = [1, 5, 10, 15, 30, 60];
 
 function normalizeOs(value) {
   const os = String(value || "").toLowerCase();
@@ -292,6 +328,10 @@ function normalizeEntry(raw) {
     // How to sign this provider in, from VendorId::sign_in_hint on the host.
     // Deliberately not a table in this file; see signInHint.
     signIn: clean(raw.sign_in, 200),
+    // A `[[custom]]` provider can name the built-in it mirrors; its mark follows.
+    brand: clean(raw.brand, 64),
+    // Wall-clock ms of the payload on screen; 0 when the report has none.
+    fetchedAt: Date.parse(clean(raw.fetched_at, 64)) || 0,
     sections,
   };
 }
@@ -345,6 +385,11 @@ function normalizeSection(raw) {
       // Claude CLI "Sessions"); "" when it stands on its own.
       group: clean(raw.group, 80),
     };
+  }
+  // A text row that meters a cap (Cursor's On-Demand spend) carries `percent`
+  // and `severity`: draw it as a bar headed by its amount.
+  if (type === "text" && typeof raw.percent === "number" && Number.isFinite(raw.percent) && raw.severity) {
+    return normalizeSection({ ...raw, type: "metric", headline: "value", detail: "" });
   }
   if (type === "text") {
     return { type: "text", label: clean(raw.label, 160), value: clean(raw.value, 1000) };
@@ -861,6 +906,8 @@ export function projectCards(payload, nowMs, locale) {
     const explained = explainError(entry.error, entry, locale);
     cards.push({
       id: entry.id,
+      icon: providerIconId(entry.brand || entry.id),
+      fetchedAt: entry.fetchedAt,
       title: entry.displayName || entry.shortName || entry.id,
       plan: entry.plan,
       stale: entry.stale,
@@ -989,8 +1036,10 @@ function normalizeStars(raw) {
   for (const id of Object.keys(raw)) {
     const key = clean(id, 180).trim();
     if (!key) continue;
-    const keys = cleanIdList(raw[id]).slice(0, MAX_STARS_PER_PROVIDER);
-    if (keys.length) stars[key] = keys;
+    // An empty list is a provider the user took off the menu bar (see
+    // `toggleStar`); it must survive storage, or `seedStars` would star it again.
+    if (!Array.isArray(raw[id])) continue;
+    stars[key] = cleanIdList(raw[id]).slice(0, MAX_STARS_PER_PROVIDER);
   }
   return stars;
 }
@@ -1025,8 +1074,10 @@ export function toggleStar(stars, providerId, key) {
   const idx = list.indexOf(metric);
   if (idx >= 0) {
     list.splice(idx, 1);
-    if (list.length === 0) delete current[id];
-    else current[id] = list;
+    // Unstarring the last metric keeps an empty list rather than dropping the
+    // provider: "off the menu bar on purpose", which `seedStars` leaves alone,
+    // unlike a provider that never had an entry.
+    current[id] = list;
     return { stars: current, error: "" };
   }
   if (list.length >= MAX_STARS_PER_PROVIDER) {
@@ -1215,9 +1266,8 @@ function pruneStars(source, known) {
   const stars = {};
   if (!source || typeof source !== "object") return stars;
   for (const id of Object.keys(source)) {
-    if (!known.has(id)) continue;
-    const keys = Array.isArray(source[id]) ? source[id].slice(0, MAX_STARS_PER_PROVIDER) : [];
-    if (keys.length) stars[id] = keys;
+    if (!known.has(id) || !Array.isArray(source[id])) continue;
+    stars[id] = source[id].slice(0, MAX_STARS_PER_PROVIDER);
   }
   return stars;
 }
@@ -1333,11 +1383,22 @@ export function seedLayout(layout, entries) {
   return Object.assign({}, layout, { hidden, seeded: true });
 }
 
-/** Fill default stars once, from projected cards (metric keys). */
+/**
+ * Give every provider without a stars entry its default stars, from projected
+ * cards (metric keys). Filling the map only while it was empty — on first
+ * launch — left a provider switched on later, or one whose entry `syncLayout`
+ * pruned while its id was missing from a payload (Antigravity switches between
+ * `antigravity` and `antigravity@<account>`), off the menu bar for good
+ * (#437). An empty list is the user's own "off" and is left alone.
+ */
 export function seedStars(layout, cards) {
-  if (!layout || (layout.stars && Object.keys(layout.stars).length)) return layout;
-  const stars = defaultStars(cards);
-  if (!Object.keys(stars).length) return layout;
+  if (!layout) return layout;
+  const current = layout.stars && typeof layout.stars === "object" ? layout.stars : {};
+  const defaults = defaultStars(cards);
+  const missing = Object.keys(defaults).filter((id) => !Array.isArray(current[id]));
+  if (!missing.length) return layout;
+  const stars = Object.assign({}, current);
+  for (const id of missing) stars[id] = defaults[id];
   return Object.assign({}, layout, { stars });
 }
 

@@ -56,6 +56,7 @@ pub struct Config {
     pub kimi: KimiConfig,
     pub kilo: KiloConfig,
     pub novita: NovitaConfig,
+    pub synthetic: SyntheticConfig,
     pub moonshot: MoonshotConfig,
     pub grok: GrokConfig,
     pub supergrok: SuperGrokConfig,
@@ -114,7 +115,7 @@ pub struct TrayConfig {
     /// Global shortcut that toggles the popover, in the canonical
     /// "Ctrl+Shift+U" spelling. `None` → no shortcut registered.
     pub shortcut: Option<String>,
-    /// How often the tray re-reads every provider, in minutes: 1, 5 or 10.
+    /// How often the tray re-reads every provider, in minutes: 1, 5, 10, 15, 30 or 60.
     /// The footer's Refresh is always immediate. `None` → 5.
     pub refresh_minutes: Option<u64>,
     /// What the tray does when a newer release is published.
@@ -129,7 +130,7 @@ pub struct TrayConfig {
 
 /// Poll intervals the tray offers, in minutes. The provider cache TTL is
 /// 60 s regardless; this only decides how often the tray asks.
-pub const TRAY_REFRESH_MINUTES: [u64; 3] = [1, 5, 10];
+pub const TRAY_REFRESH_MINUTES: [u64; 6] = [1, 5, 10, 15, 30, 60];
 const DEFAULT_TRAY_REFRESH_MINUTES: u64 = 5;
 
 /// Quota-threshold desktop notifications. On by default at 97%: the bar's
@@ -1617,6 +1618,24 @@ impl Default for NovitaConfig {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(default)]
+pub struct SyntheticConfig {
+    pub enabled: bool,
+    pub api_key_env: String,
+    pub api_key: Option<String>,
+}
+
+impl Default for SyntheticConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            api_key_env: "SYNTHETIC_API_KEY".into(),
+            api_key: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(default)]
 pub struct LyceumConfig {
     pub enabled: bool,
     pub accounts: Vec<ApiKeyAccount>,
@@ -2394,6 +2413,7 @@ impl Config {
             self.kimi.api_key.as_deref(),
             self.kilo.api_key.as_deref(),
             self.novita.api_key.as_deref(),
+            self.synthetic.api_key.as_deref(),
             self.minimax.api_key.as_deref(),
             self.moonshot.api_key.as_deref(),
             self.grok.api_key.as_deref(),
@@ -2490,6 +2510,7 @@ impl Config {
             VendorId::Kimi => self.kimi.enabled,
             VendorId::Kilo => self.kilo.enabled,
             VendorId::Novita => self.novita.enabled,
+            VendorId::Synthetic => self.synthetic.enabled,
             VendorId::Moonshot => self.moonshot.enabled,
             VendorId::Grok => self.grok.enabled,
             VendorId::Supergrok => self.supergrok.enabled,
@@ -2527,6 +2548,7 @@ impl Config {
             VendorId::Kimi => &self.kimi.api_key_env,
             VendorId::Kilo => &self.kilo.api_key_env,
             VendorId::Novita => &self.novita.api_key_env,
+            VendorId::Synthetic => &self.synthetic.api_key_env,
             VendorId::Moonshot => &self.moonshot.api_key_env,
             VendorId::Grok => &self.grok.api_key_env,
             VendorId::Minimax => &self.minimax.api_key_env,
@@ -2566,6 +2588,7 @@ impl Config {
             VendorId::Kimi => self.kimi.api_key.as_deref(),
             VendorId::Kilo => self.kilo.api_key.as_deref(),
             VendorId::Novita => self.novita.api_key.as_deref(),
+            VendorId::Synthetic => self.synthetic.api_key.as_deref(),
             VendorId::Moonshot => self.moonshot.api_key.as_deref(),
             VendorId::Grok => self.grok.api_key.as_deref(),
             VendorId::Minimax => self.minimax.api_key.as_deref(),
@@ -2735,7 +2758,7 @@ impl Config {
             && !TRAY_REFRESH_MINUTES.contains(&minutes)
         {
             return Err(AppError::Other(format!(
-                "[tray] refresh_minutes must be one of 1, 5 or 10, got {minutes}"
+                "[tray] refresh_minutes must be one of 1, 5, 10, 15, 30 or 60, got {minutes}"
             )));
         }
         if !(1..=100).contains(&self.notifications.threshold) {
@@ -5964,11 +5987,11 @@ enabled = true
 
     #[test]
     fn tray_refresh_minutes_rejects_values_outside_the_menu() {
-        for minutes in ["3", "0"] {
+        for minutes in ["3", "0", "120"] {
             let file = write_toml(&format!("[tray]\nrefresh_minutes = {minutes}\n"));
             let error = Config::load_from(file.path()).unwrap_err().to_string();
             assert!(error.contains("[tray] refresh_minutes"), "{error}");
-            assert!(error.contains("1, 5 or 10"), "{error}");
+            assert!(error.contains("1, 5, 10, 15, 30 or 60"), "{error}");
         }
     }
 
