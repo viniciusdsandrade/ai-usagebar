@@ -1,5 +1,60 @@
 ## [Unreleased]
 
+## [1.40.1] — 2026-10-17
+
+### Fixed
+
+- **With several `agy` sessions open, the macOS Antigravity entry shows the
+  latest reading of the quota, not the latest redraw.** Each `agy` process
+  re-sends the quota it last fetched every time it redraws its status line,
+  and it fetches only after a turn of its own, so an idle session keeps
+  sending its startup figures under a fresh timestamp. The entry used
+  whichever session redrew last, so it flipped between their figures and
+  often showed the oldest. Readings are now ordered by the figures themselves
+  — a window's reset only moves later, and within a window usage only grows —
+  and the arrival time decides only when the figures cannot. Closing the busy
+  session no longer drops the entry back to an idle one's older figures
+  either: a closed session's reading stands while it is still the latest and
+  another session of the account is running.
+
+- **macOS menu bar parses and displays Synthetic subscription quota.**
+  Selecting Synthetic in the menu bar now displays its subscription request
+  quota with a dedicated label and hides the unused weekly window, while the
+  format string mirrors the `{synthetic_pct}` and `{synthetic_reset}`
+  placeholders.
+
+- **Antigravity reads `agy`'s own quota when `agy` is installed.** With only
+  the `agy` CLI signed in, the remote fallback asked the Cloud Code API, which
+  answers an `agy` account with a different reading: prod's Gemini group is
+  another tracker (an untouched week showed 0% while `agy` showed 37%), and
+  daily leaves the Gemini group out. The fallback now asks
+  `agy -p "/quota"` first — the figures `agy`'s own Models & Quota page shows,
+  Argon included — and goes to the Cloud Code API only when `agy` cannot
+  answer. A reading starts `agy`, so it is taken at most every two minutes,
+  and a failed one is not retried for ten. `[antigravity] agy_binary` can pin
+  the executable instead of trusting the ambient `PATH` (#450).
+
+- **The macOS tray keeps Antigravity's place and stars across reboots.** The
+  popover dropped the saved settings of any card a payload lacked, and
+  Antigravity's entry switches id — `antigravity` with no `agy` status-line
+  session, `antigravity@<account>` with one — on every reboot and whenever the
+  last session closes. Its place in Customize, its starred metrics and its
+  rows went back to the defaults each time. A card missing from a payload now
+  keeps its settings for when it returns, and an id seen for the first time
+  takes over the place and settings of its sole absent sibling of the same
+  provider. Ambiguous multi-account histories remain separate instead of
+  assigning one account's preferences to another (#452).
+
+- **An exhausted Gemini 4 Argon no longer reads as an exhausted Antigravity
+  in the macOS menu bar.** The Logos and Quattro chips, and the popover's
+  provider tabs, show a provider's busiest quota window, and the per-model
+  pool counted as one: at 100% it hid shared Gemini windows at 55% and 39%
+  that Flash, Pro, Claude and GPT-OSS still draw on. The report now marks a
+  per-model pool's metric `model_pool: true`, and those summaries rank it
+  like a breakdown row — it stands in only when nothing the provider shares
+  is left. The pool keeps its own row and still counts toward severity and
+  notifications (#453).
+
 ## [1.40.0] — 2026-10-17
 
 ### Added
@@ -4549,7 +4604,8 @@ vendors. Highlights:
 - Live API smoke test suite (`make smoke`) that exercises the real
   undocumented endpoints to detect schema drift before users do.
 
-[Unreleased]: https://github.com/akitaonrails/ai-usagebar/compare/v1.40.0...HEAD
+[Unreleased]: https://github.com/akitaonrails/ai-usagebar/compare/v1.40.1...HEAD
+[1.40.1]: https://github.com/akitaonrails/ai-usagebar/compare/v1.40.0...v1.40.1
 [1.40.0]: https://github.com/akitaonrails/ai-usagebar/compare/v1.39.1...v1.40.0
 [1.39.1]: https://github.com/akitaonrails/ai-usagebar/compare/v1.39.0...v1.39.1
 [1.39.0]: https://github.com/akitaonrails/ai-usagebar/compare/v1.38.1...v1.39.0

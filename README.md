@@ -304,7 +304,7 @@ come from environment variables or `config.toml`.
 | SuperGrok | Existing `grok login` (its `auth.json` key, or its ACP extension) | Opt in, install Grok Build, and run `grok login`. This reports subscription usage — overall included credits plus per-product slices (Build, Chat, Imagine) — not the Management API balance. |
 | Grok Bot | Existing Grok Bot desktop sign-in (Linux and macOS) | Opt in, install the Grok Bot desktop app, and sign in to it once. This reports the app's weekly included-usage pool — not the Management API balance, and not the Grok Build subscription. Refreshed tokens stay in ai-usagebar's cache; the app's own file is never written. |
 | MiniMax | Token Plan subscription key | Opt in with `MINIMAX_API_KEY` or config. Choose the matching global or China region; pay-as-you-go keys do not work. |
-| Google Antigravity | Local Antigravity server, saved Google session, or `agy` status line | Opt in. The desktop products provide quota through their local server. The `agy` CLI can provide its live session quotas through the macOS status-line integration (see [Multiple Antigravity CLI accounts](#multiple-antigravity-cli-accounts-macos)); the existing saved-session Cloud Code API fallback remains available and is labelled `Google API` in the TUI. |
+| Google Antigravity | Local Antigravity server, `agy` itself, saved Google session, or `agy` status line | Opt in. The desktop products provide quota through their local server. With the `agy` CLI installed, quota is read from `agy -p "/quota"` — the figures its own Models & Quota page shows — at most every two minutes. The `agy` CLI can also provide its live session quotas through the macOS status-line integration (see [Multiple Antigravity CLI accounts](#multiple-antigravity-cli-accounts-macos)); the saved-session Cloud Code API fallback answers when neither can, and is labelled `Google API` in the TUI. |
 | Cursor | Existing Cursor IDE or `cursor-agent` login | Opt in and sign in once. `cursor-agent` is the headless fallback. |
 | Kiro CLI | Existing kiro-cli login | Opt in and run `kiro-cli login` once. ai-usagebar refreshes the session when needed. |
 | Nous Research | OAuth device flow | Enable `[nous]`, click **Log in with Nous Research** in the Omarchy settings panel, or run `ai-usagebar auth nous login`. Credentials are kept in ai-usagebar's separate platform config directory (`~/.config/ai-usagebar/credentials.json` on Linux). |
@@ -738,7 +738,11 @@ of the reset window in seconds. `window_secs` is present only when the vendor
 states the window (rolling 5h/7d windows; Cursor's billing cycle from
 `billingCycleStart`/`billingCycleEnd`, never guessed as a month when the start
 is missing) and is omitted, not `null`, otherwise — a calendar month or an
-unstated window gives a frontend nothing to pace against. Cursor's On-Demand text row
+unstated window gives a frontend nothing to pace against. A per-model quota
+pool's metric (Antigravity's "Gemini 4 Argon") carries `model_pool: true`, and
+the field is omitted otherwise: it is one model's own limit rather than a
+window the whole provider shares, so a frontend that sums a provider up in one
+figure ranks it below the shared windows. Cursor's On-Demand text row
 may also carry `used_cents`, `limit_cents`, and `percent`: the spend and the
 prepaid cap in USD cents, and how much of that cap is already used (rounded
 half up, and above 100 when spend passes the cap). Those fields are omitted,
