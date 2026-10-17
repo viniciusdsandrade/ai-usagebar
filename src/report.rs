@@ -432,7 +432,8 @@ fn entry_from_state(tab: &TabId, state: &TabState, now: chrono::DateTime<Utc>) -
                     reset_at: projected.reset_at,
                     window_secs: projected
                         .window
-                        .map(|window| window.num_seconds().max(0) as u64),
+                        .filter(|window| window.num_seconds() > 0)
+                        .map(|window| window.num_seconds() as u64),
                     group: projected.group.map(str::to_string),
                 });
             }
@@ -1049,7 +1050,7 @@ mod tests {
     use crate::usage::{
         CursorCreditGrant, CursorSnapshot, DeepseekSnapshot, KimiSnapshot, KiroSnapshot,
         OpenAiSnapshot, OpenAiSource, OpenRouterSnapshot, ResetCredit, ResetCredits,
-        SuperGrokPeriod, SuperGrokSnapshot, VendorSnapshot,
+        SuperGrokPeriod, SuperGrokSnapshot, SyntheticSnapshot, UsageWindow, VendorSnapshot,
     };
     use crate::vendor::VendorId;
 
@@ -1099,6 +1100,7 @@ mod tests {
                 weekly: None,
                 third_party_session: None,
                 third_party_weekly: None,
+                model_pools: Vec::new(),
             },
         }
     }
@@ -1512,6 +1514,37 @@ mod tests {
         // must not be handed a length to pace against.
         assert!(first["metrics"][0]["window_secs"].is_null());
         assert!(first["sections"][1].get("window_secs").is_none());
+    }
+
+    #[test]
+    fn non_positive_cycle_omits_window_secs_from_report() {
+        let fetched_at = Utc::now() - chrono::Duration::minutes(1);
+        let reset_at = Utc::now() + chrono::Duration::days(14);
+        for duration in [chrono::Duration::zero(), chrono::Duration::seconds(-1)] {
+            let state = TabState::Ready(Box::new(ReadyTab {
+                snapshot: VendorSnapshot::Synthetic(SyntheticSnapshot {
+                    subscription: UsageWindow {
+                        utilization_pct: 35,
+                        resets_at: Some(reset_at),
+                        window_duration: duration,
+                    },
+                    requests: 350.0,
+                    limit: 1000.0,
+                }),
+                stale: false,
+                last_error: None,
+                fetched_at: Some(fetched_at),
+                display: Default::default(),
+            }));
+            let projected =
+                entry_from_state(&TabId::vendor(VendorId::Synthetic), &state, Utc::now());
+            let rendered = render_json_for_primary(&[projected], None);
+            let value: serde_json::Value = serde_json::from_str(&rendered).unwrap();
+            let first = &value["entries"][0];
+
+            assert!(first["metrics"][0]["window_secs"].is_null());
+            assert!(first["sections"][1].get("window_secs").is_none());
+        }
     }
 
     // --- #255: Claude CLI sessions as grouped report rows ----------------------
