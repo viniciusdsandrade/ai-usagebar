@@ -338,8 +338,10 @@ function normalizeEntry(raw) {
 
 function normalizeResetCredits(raw) {
   if (!isPlainObject(raw)) return null;
-  const available = Math.max(0, Math.min(10_000, Math.floor(finiteNumber(raw.available))));
-  if (available === 0) return null;
+  if (typeof raw.available !== "number" || !Number.isFinite(raw.available)) return null;
+  // The host only sends a zero when the provider states it (Codex), so it
+  // stays a row reading "0 available" instead of disappearing.
+  const available = Math.max(0, Math.min(10_000, Math.floor(raw.available)));
   const source = Array.isArray(raw.credits) ? raw.credits : [];
   const credits = [];
   for (let i = 0; i < source.length && i < 64; i++) {
@@ -1034,6 +1036,20 @@ function normalizeTheme(value) {
 }
 
 /** @returns {Record<string, string[]>} */
+function isLegacyAnthropicSpendKey(key) {
+  return /^(metric|text):(?:Month to date \(through [^)]+\)|Completed daily buckets this month)$/.test(key);
+}
+
+function canonicalStoredRowKey(providerId, key) {
+  if (vendorSlug(providerId) !== "anthropic_api" || !isLegacyAnthropicSpendKey(key)) return key;
+  return key.slice(0, key.indexOf(":")) + ":Spend (mo)";
+}
+
+function normalizeStoredRowKeys(providerId, raw) {
+  const keys = cleanIdList(raw).map((key) => canonicalStoredRowKey(providerId, key));
+  return keys.filter((key, index) => keys.indexOf(key) === index);
+}
+
 function normalizeStars(raw) {
   const stars = {};
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return stars;
@@ -1043,7 +1059,7 @@ function normalizeStars(raw) {
     // An empty list is a provider the user took off the menu bar (see
     // `toggleStar`); it must survive storage, or `seedStars` would star it again.
     if (!Array.isArray(raw[id])) continue;
-    stars[key] = cleanIdList(raw[id]).slice(0, MAX_STARS_PER_PROVIDER);
+    stars[key] = normalizeStoredRowKeys(key, raw[id]).slice(0, MAX_STARS_PER_PROVIDER);
   }
   return stars;
 }
@@ -1180,10 +1196,16 @@ export function normalizeLayout(raw) {
       const key = clean(id, 180).trim();
       if (!key) continue;
       const off = {};
-      copyFlagMap(prefs.off, off);
+      if (prefs.off && typeof prefs.off === "object" && !Array.isArray(prefs.off)) {
+        for (const rowKey of Object.keys(prefs.off)) {
+          if (prefs.off[rowKey] !== true) continue;
+          const cleanKey = clean(rowKey, 180).trim();
+          if (cleanKey) off[canonicalStoredRowKey(key, cleanKey)] = true;
+        }
+      }
       layout.rows[key] = {
-        always: cleanIdList(prefs.always),
-        demand: cleanIdList(prefs.demand),
+        always: normalizeStoredRowKeys(key, prefs.always),
+        demand: normalizeStoredRowKeys(key, prefs.demand),
         off,
       };
     }

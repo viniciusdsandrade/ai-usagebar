@@ -490,14 +490,16 @@ impl VendorSnapshot {
     /// once for the report's `reset_credits` field and once for the
     /// expiry notifications — and adding a third provider to only one of them
     /// is a silent half-feature: the sidebar lists a grant the notifier never
-    /// warns about. `None` is the honest answer for every other vendor; it is
-    /// not the same as an empty [`ResetCredits`], which means "this provider
-    /// banks resets and you currently hold none".
+    /// warns about. `None` is the honest answer for every other vendor, and
+    /// for Claude and SuperGrok while they hold none. Codex's usage response
+    /// states its count, so an empty [`ResetCredits`] there means "this
+    /// account banks resets and currently holds none" and is shown as such;
+    /// `None` for Codex means the response omitted the block.
     pub fn reset_credits(&self) -> Option<&ResetCredits> {
         match self {
-            Self::Anthropic(snapshot) => Some(&snapshot.reset_credits),
-            Self::Openai(snapshot) => Some(&snapshot.reset_credits),
-            Self::SuperGrok(snapshot) => Some(&snapshot.reset_credits),
+            Self::Anthropic(snapshot) => Some(&snapshot.reset_credits).filter(|c| !c.is_empty()),
+            Self::Openai(snapshot) => snapshot.reset_credits.as_ref(),
+            Self::SuperGrok(snapshot) => Some(&snapshot.reset_credits).filter(|c| !c.is_empty()),
             _ => None,
         }
     }
@@ -633,17 +635,20 @@ impl AnthropicApiSnapshot {
     }
 
     pub fn coverage_label(&self) -> String {
-        let Some(date) = self.covered_through else {
-            return "Completed daily buckets this month".into();
-        };
+        match self.covered_through_day() {
+            Some(day) => format!("Month to date (through {day})"),
+            None => "Completed daily buckets this month".into(),
+        }
+    }
+
+    /// The last fully covered UTC day as the card prints it, `Oct 17`.
+    pub fn covered_through_day(&self) -> Option<String> {
+        let date = self.covered_through?;
         const MONTHS: [&str; 12] = [
             "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
         ];
         let month = MONTHS[chrono::Datelike::month0(&date) as usize];
-        format!(
-            "Month to date (through {month} {})",
-            chrono::Datelike::day(&date)
-        )
+        Some(format!("{month} {}", chrono::Datelike::day(&date)))
     }
 }
 
@@ -857,7 +862,10 @@ pub struct OpenAiSnapshot {
     pub unavailable_models: Vec<OpenAiUnavailableModel>,
     /// Optional credit balance + approximate message-count ranges.
     pub credits: Option<OpenAiCredits>,
-    pub reset_credits: ResetCredits,
+    /// `None` when the usage response omits the block (a Codex build that
+    /// predates banked resets); `Some` with `available == 0` when it states
+    /// that the account holds none, which the report shows as such.
+    pub reset_credits: Option<ResetCredits>,
     /// Source of the snapshot — Codex OAuth vs admin-key fallback. Drives
     /// the placeholder set and the "OpenAI does not expose this for Plus"
     /// tooltip when the OAuth path isn't available.

@@ -1616,6 +1616,41 @@ assert.equal(resolvedTheme('system'), 'light');
 }
 
 {
+  // 1.41.0 put Anthropic API's changing coverage date in persisted row keys.
+  // Loading that layout migrates every variant to the stable spend row,
+  // deduplicates it, and frees the second star slot.
+  const restored = normalizeLayout({
+    stars: {
+      anthropic_api: [
+        'metric:Month to date (through Oct 17)',
+        'metric:Month to date (through Oct 18)',
+      ],
+      'anthropic_api@work': ['text:Completed daily buckets this month'],
+    },
+    rows: {
+      anthropic_api: {
+        always: ['metric:Month to date (through Oct 17)', 'metric:Spend (mo)'],
+        demand: ['text:Completed daily buckets this month', 'text:Other'],
+        off: {
+          'metric:Month to date (through Oct 18)': true,
+          'text:Completed daily buckets this month': true,
+        },
+      },
+    },
+  });
+  assert.deepEqual(restored.stars.anthropic_api, ['metric:Spend (mo)']);
+  assert.deepEqual(restored.stars['anthropic_api@work'], ['text:Spend (mo)']);
+  assert.deepEqual(restored.rows.anthropic_api, {
+    always: ['metric:Spend (mo)'],
+    demand: ['text:Spend (mo)', 'text:Other'],
+    off: { 'metric:Spend (mo)': true, 'text:Spend (mo)': true },
+  });
+  const added = toggleStar(restored.stars, 'anthropic_api', 'metric:Requests');
+  assert.equal(added.error, '');
+  assert.deepEqual(added.stars.anthropic_api, ['metric:Spend (mo)', 'metric:Requests']);
+}
+
+{
   const payload = parseHostPayload({
     entries: [{
       id: 'anthropic',
@@ -1898,6 +1933,44 @@ assert.equal(resolvedTheme('system'), 'light');
   const prefs = defaultRowPrefs(card.rows);
   assert.ok(prefs.demand.indexOf('resetCredits:Rate Limit Resets') >= 0);
   assert.ok(prefs.always.indexOf('resetCredits:Rate Limit Resets') < 0);
+}
+
+{
+  // A stated zero (Codex) is a row reading "0 available", not a missing one,
+  // and its "Reset credits" text block becomes that row rather than a block.
+  const payload = parseHostPayload({
+    entries: [{
+      id: 'openai',
+      display_name: 'Codex',
+      reset_credits: { available: 0, credits: [] },
+      sections: [
+        { type: 'metric', label: 'Weekly', percent: 10, reset_at: '2026-10-01T00:00:00Z' },
+        { type: 'block', label: 'Reset credits', body: ['None available'] },
+      ],
+    }],
+  });
+  const [card] = projectCards(payload, 0);
+  assert.equal(card.resetCredits.available, 0);
+  const resets = card.rows.filter((row) => row.kind === 'resetCredits');
+  assert.equal(resets.length, 1);
+  assert.equal(resets[0].available, 0);
+  assert.equal(resets[0].credits.length, 0);
+  assert.ok(!card.rows.some((row) => row.kind !== 'resetCredits' && /reset credits/i.test(row.label || '')));
+}
+
+{
+  // Only an explicit finite number means the provider stated a reset-credit
+  // balance. Malformed or partial objects must not invent a zero balance.
+  for (const resetCredits of [{}, { available: '0' }, { available: null }, { available: Infinity }]) {
+    const payload = parseHostPayload({
+      entries: [{ id: 'openai', display_name: 'Codex', reset_credits: resetCredits, sections: [] }],
+    });
+    assert.equal(payload.entries[0].resetCredits, null);
+  }
+  const payload = parseHostPayload({
+    entries: [{ id: 'openai', display_name: 'Codex', reset_credits: { available: -2 }, sections: [] }],
+  });
+  assert.equal(payload.entries[0].resetCredits.available, 0);
 }
 
 {

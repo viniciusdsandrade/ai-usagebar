@@ -334,13 +334,16 @@ use mode `0600`; an existing current-user-owned config directory also works when
 it is not group- or world-writable. Windows uses the user's platform config
 directory and inherited per-user access controls.
 
-OpenCode Go uses the official usage endpoint and the `percent` field. Its key is
-resolved from `OPENCODE_GO_API_KEY` / `[opencode-go] api_key` first, or read
-read-only from the credential the official OpenCode CLI already wrote to
-`~/.local/share/opencode/auth.json` (`$XDG_DATA_HOME` is honoured;
-`[opencode-go] auth_paths` overrides the file), so a signed-in CLI needs no
-setup. The file is never written, copied, or cached. Keys entered through the
-native Settings panel are sent to the Rust settings command over stdin and are
+OpenCode Go uses the official usage endpoint and its `percent` field. An
+explicit `OPENCODE_GO_API_KEY` / `[opencode-go] api_key` wins. Otherwise it reads
+`auth.json`, then OpenCode 2's `opencode.db`, under `$XDG_DATA_HOME/opencode`
+or `~/.local/share/opencode`. The database reader uses only the active
+`opencode` credential: an API key or an unexpired OAuth access token. Both
+stores are read-only; no credential is copied or cached, and token refresh
+stays with OpenCode. If the saved OAuth token expires, renew it in the CLI.
+`[opencode-go] auth_paths` replaces the search list with exactly the JSON or
+SQLite files you name, in order, for a non-standard install.
+Keys entered through the native Settings panel are sent to the Rust settings command over stdin and are
 never placed in QML command arguments; cache entries are tied to the endpoint
 and a one-way key fingerprint, so changing accounts cannot reuse another
 account's fresh or stale usage.
@@ -700,6 +703,34 @@ ai-usagebar --vendor openrouter --watch 5
 # Interactive TUI with tabs.
 ai-usagebar-tui
 ```
+
+### MCP clients
+
+`ai-usagebar mcp` runs a local stdio MCP server for Claude Code, Codex, Cursor,
+Gemini CLI, and other compatible clients. Configure the client to launch this
+command:
+
+```json
+{
+  "command": "ai-usagebar",
+  "args": ["mcp"]
+}
+```
+
+It exposes two read-only tools:
+
+- `get_usage` returns the same versioned report as `usage --json`. With no
+  arguments it queries every enabled provider. `provider` accepts a built-in
+  slug such as `anthropic` or `openai` (or `custom:<id>`); optional `account`
+  narrows it to one named account.
+- `list_providers` returns the local `vendors --json` catalog without making
+  network requests or exposing credential values.
+
+`get_usage` uses the normal credential readers, cache, and backoff policy, so
+it may read configured credentials and contact only the providers selected by
+the call. The MCP interface cannot sign in, switch accounts, force a refresh,
+or change configuration. Standard output is reserved for protocol messages;
+server diagnostics go to standard error.
 
 The JSON report has two views of each provider:
 

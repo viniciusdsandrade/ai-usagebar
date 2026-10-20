@@ -44,10 +44,10 @@ pub struct Probes<'a> {
     /// user signed pi into any provider, so existence alone cannot mean
     /// "signed in" the way the provider-owned files above can.
     pub commandcode_signed_in: &'a dyn Fn(&[PathBuf]) -> bool,
-    /// Whether one of OpenCode Go's auth files holds a live key. Existence
-    /// alone cannot mean "signed in" either: the CLI's `auth.json` holds every
-    /// provider the user has connected, and only the `opencode` entry with a
-    /// key-bearing type is the account this endpoint accepts.
+    /// Whether an OpenCode Go store holds a usable key or access token.
+    /// Existence alone cannot mean "signed in": legacy JSON holds multiple
+    /// providers, and the v2 database can contain inactive or expired logins.
+    /// The shared reader selects the `opencode` entry or active database row.
     pub opencode_go_signed_in: &'a dyn Fn(&[PathBuf]) -> bool,
     /// Whether one of Cline's auth files holds a live credential.
     pub cline_signed_in: &'a dyn Fn(&[PathBuf]) -> bool,
@@ -308,6 +308,13 @@ fn keychain_has_claude_for(config_dir: &Path) -> bool {
 #[cfg(not(target_os = "macos"))]
 fn keychain_has_claude_for(_config_dir: &Path) -> bool {
     false
+}
+
+/// `vendors --json`: the catalog as one JSON document.
+pub fn collect_json() -> Result<String, String> {
+    let cfg = Config::load().map_err(|error| error.user_message())?;
+    serde_json::to_string(&serde_json::json!({"vendors": statuses(&cfg)}))
+        .map_err(|error| error.to_string())
 }
 
 /// `vendors --json`: the catalog as one JSON document.

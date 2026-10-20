@@ -1,5 +1,65 @@
 ## [Unreleased]
 
+### Security
+
+- **The popover build uses Vite 8.3.4.** This fixes Windows command-argument
+  escaping in the development server (GHSA-698v-4r3x-3vcv).
+
+- **TLS certificate verification uses the patched WebPKI trust data.** Updated
+  `rustls-webpki` and `webpki-roots` to exclude distrusted intermediates
+  (RUSTSEC-2026-0382 and RUSTSEC-2026-0381).
+
+- **macOS launches fixed system tools by their trusted paths.** Antigravity
+  discovery and the desktop launch/browser helpers previously resolved
+  `lsof`, `ps`, `open`, `osascript`, and `bash` through the inherited `PATH`.
+  A same-named executable in a user-writable directory could therefore run
+  during refresh, sign-in, or UI actions. These calls now use macOS's fixed
+  `/usr/sbin`, `/usr/bin`, and `/bin` locations (#472).
+
+### Added
+
+- **AI clients can query usage through a built-in MCP server.** Run
+  `ai-usagebar mcp` as a local stdio server to expose read-only `get_usage`
+  and `list_providers` tools. Usage can be narrowed to a provider or named
+  account and reuses the existing report, credential, cache, and backoff paths;
+  it cannot change accounts or configuration (#468).
+
+- **The Linux Mint tray icon shows the leading provider's usage.** The XApp
+  status icon carries that provider's percentage as its label, and its tooltip
+  lists the same provider lines as the menu, so quota is visible on hover
+  without opening the dashboard. A leading provider with no percentage (a
+  balance) leaves the label blank; before the first report arrives the tooltip
+  keeps its "open dashboard" hint.
+
+### Fixed
+
+- **A format shared across providers no longer prints `{session_pct}` for Grok
+  Bot.** Grok Bot has no session window and never defined the session aliases,
+  so `{session_pct}`, `{session_reset}` and `{session_elapsed}` stayed on the
+  bar as literal text while it was selected. They now expand to empty strings,
+  as Devin's do (#474).
+
+- **OpenCode Go recognizes OpenCode 2 logins.** It can read the active API key
+  or unexpired OAuth access token from the CLI's `opencode.db` without
+  modifying the database or refreshing credentials. Explicit keys and the
+  legacy `auth.json` retain precedence; `auth_paths` can name either store.
+
+- **The Anthropic API spend row keeps its name from one day to the next.**
+  1.41.0 put the last covered day in the row's label, and the label is how
+  notifications, the popover's stars and hidden rows, and Omarchy's bar find
+  the row. A spend over the threshold notified again every day, a starred or
+  hidden row was forgotten each morning, and without a `monthly_limit` the
+  Omarchy bar read `Ready` instead of the spend. The row is `Spend (mo)` again,
+  and the covered day sits on a `Through` row of its own (#470).
+
+- **A Codex account with no banked resets says so.** When the usage response
+  states `available_count: 0`, the account now shows "Reset credits: None
+  available" in the tooltip and TUI, `reset_credits: {"available": 0}` in
+  `usage --json`, and a "Rate Limit Resets · 0 available" row in the popover,
+  instead of dropping the section. Before, an account with none looked the same
+  as one whose figures never arrived. A response that omits the block still
+  shows nothing, and Claude and SuperGrok are unchanged (#466).
+
 ## [1.41.0] — 2026-10-18
 
 ### Changed

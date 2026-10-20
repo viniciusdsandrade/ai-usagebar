@@ -121,6 +121,25 @@ fn report_targets_matching(targets: &[ReportTarget], entry_id: &str) -> Vec<Repo
         .collect()
 }
 
+fn report_targets_for_filter(
+    targets: &[ReportTarget],
+    provider: &str,
+    account: Option<&str>,
+) -> Vec<ReportTarget> {
+    let exact = account.map(|label| format!("{provider}@{label}"));
+    targets
+        .iter()
+        .filter(|target| {
+            let id = report_target_id(target);
+            exact.as_ref().map_or_else(
+                || id == provider || id.starts_with(&format!("{provider}@")),
+                |wanted| id == *wanted,
+            )
+        })
+        .cloned()
+        .collect()
+}
+
 /// Lossless machine-readable projection of a TUI panel row. `metrics` remains
 /// available in JSON as a convenience view over only the gauge rows; callers
 /// that need every reported value should consume this ordered list.
@@ -208,6 +227,72 @@ impl ReportSection {
 pub async fn collect_json() -> std::result::Result<String, String> {
     let (entries, primary, overview) = collect_entries().await?;
     Ok(render_json_document(&entries, primary, overview.as_deref()))
+}
+
+/// Snapshot only one provider, optionally narrowed to one named account.
+/// Filtering happens before refreshes, so an MCP query never contacts
+/// unrelated providers merely to discard their results afterward.
+pub async fn collect_filtered_json(
+    provider: Option<&str>,
+    account: Option<&str>,
+) -> std::result::Result<String, String> {
+    if provider.is_none() {
+        if account.is_some() {
+            return Err("account requires provider".into());
+        }
+        return collect_json().await;
+    }
+    let provider = provider.unwrap_or_default().trim();
+    if provider.is_empty() {
+        return Err("provider must not be empty".into());
+    }
+    let account = account.map(str::trim);
+    if account.is_some_and(str::is_empty) {
+        return Err("account must not be empty".into());
+    }
+
+    let config = Config::load().map_err(|error| error.user_message())?;
+    let client = crate::widget::run::http_client().map_err(|error| error.user_message())?;
+    let tabs: Vec<TabId> = tabs_with_desktop(&config)
+        .into_iter()
+        .filter(|tab| tab_provider_id(tab) == provider)
+        .collect();
+    if tabs.is_empty() {
+        return Err(format!("no enabled provider matches {provider}"));
+    }
+    let accounts = if provider == crate::vendor::VendorId::Antigravity.slug() {
+        crate::antigravity::statusline::active_accounts().unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+    let targets = report_targets_for_filter(
+        &expand_antigravity_tabs(&tabs, &accounts),
+        provider,
+        account,
+    );
+    if targets.is_empty() {
+        let suffix = account.map_or(String::new(), |label| format!(" account {label}"));
+        return Err(format!("no enabled provider matches {provider}{suffix}"));
+    }
+    let entries = collect_report_targets_for(&client, &config, &targets).await;
+    let overview = config.ui.overview_vendors.as_ref().map(|vendors| {
+        vendors
+            .iter()
+            .map(|vendor| vendor.slug())
+            .collect::<Vec<_>>()
+    });
+    Ok(render_json_document(
+        &entries,
+        config.ui.primary.map(|vendor| vendor.slug()),
+        overview.as_deref(),
+    ))
+}
+
+fn tab_provider_id(tab: &TabId) -> String {
+    match &tab.source {
+        TabSource::Builtin(vendor) => vendor.slug().to_string(),
+        TabSource::Custom { id, .. } => format!("custom:{id}"),
+    }
 }
 
 /// Snapshot one configured vendor or account — the entry whose `id` is
@@ -499,11 +584,10 @@ fn entry_from_antigravity_account(
 }
 
 fn reset_credits_for(state: &TabState) -> Option<crate::usage::ResetCredits> {
-    let credits = match state {
-        TabState::Ready(ready) => ready.snapshot.reset_credits()?,
-        _ => return None,
-    };
-    (!credits.is_empty()).then(|| credits.clone())
+    match state {
+        TabState::Ready(ready) => ready.snapshot.reset_credits().cloned(),
+        _ => None,
+    }
 }
 
 /// #255: surface the opt-in context monitor's recent Claude Code sessions on
@@ -1149,6 +1233,43 @@ mod tests {
             expand_antigravity_tabs(&tabs, &[antigravity_account(0), antigravity_account(1)]);
         assert_eq!(targets.len(), 1);
         assert_eq!(report_target_id(&targets[0]), "anthropic");
+    }
+
+    #[test]
+    fn report_filter_selects_only_the_requested_provider_and_account() {
+        let targets = vec![
+            ReportTarget::Tab(TabId::vendor(VendorId::Anthropic)),
+            ReportTarget::Tab(TabId::account_for(VendorId::Anthropic, "work")),
+            ReportTarget::Tab(TabId::account_for(VendorId::Openai, "work")),
+            ReportTarget::Tab(TabId {
+                source: TabSource::Custom {
+                    id: "local".into(),
+                    name: "Local".into(),
+                    short_name: "loc".into(),
+                },
+                account: None,
+                desktop: false,
+            }),
+        ];
+        let ids =
+            |selected: Vec<ReportTarget>| selected.iter().map(report_target_id).collect::<Vec<_>>();
+        assert_eq!(
+            ids(report_targets_for_filter(&targets, "anthropic", None)),
+            ["anthropic", "anthropic@work"]
+        );
+        assert_eq!(
+            ids(report_targets_for_filter(
+                &targets,
+                "anthropic",
+                Some("work")
+            )),
+            ["anthropic@work"]
+        );
+        assert_eq!(
+            ids(report_targets_for_filter(&targets, "custom:local", None)),
+            ["custom:local"]
+        );
+        assert!(report_targets_for_filter(&targets, "openai", Some("missing")).is_empty());
     }
 
     #[test]
@@ -1916,13 +2037,13 @@ mod tests {
                 additional_limits: Vec::new(),
                 unavailable_models: Vec::new(),
                 credits: None,
-                reset_credits: ResetCredits {
+                reset_credits: Some(ResetCredits {
                     available: 2,
                     credits: vec![ResetCredit {
                         title: Some("Full reset".into()),
                         expires_at: Some(expiry),
                     }],
-                },
+                }),
                 source: OpenAiSource::CodexOauth,
             }),
             stale: false,
@@ -1946,6 +2067,56 @@ mod tests {
                 section["type"] == "block" && section["label"] == "Reset credits"
             })
         );
+    }
+
+    /// A Codex account that states it holds no banked resets reports
+    /// `{"available": 0}` and a "None available" block, so a frontend can tell
+    /// it from a response that never mentioned resets (`null`, no block).
+    #[test]
+    fn json_tells_a_stated_zero_from_an_absent_reset_block() {
+        let entry_for = |reset_credits: Option<ResetCredits>| {
+            let state = TabState::Ready(Box::new(ReadyTab {
+                snapshot: VendorSnapshot::Openai(OpenAiSnapshot {
+                    plan: "ChatGPT Pro".into(),
+                    session: None,
+                    weekly: None,
+                    code_review: None,
+                    additional_limits: Vec::new(),
+                    unavailable_models: Vec::new(),
+                    credits: None,
+                    reset_credits,
+                    source: OpenAiSource::CodexOauth,
+                }),
+                stale: false,
+                last_error: None,
+                fetched_at: None,
+                display: Default::default(),
+            }));
+            let projected = entry_from_state(&TabId::vendor(VendorId::Openai), &state, Utc::now());
+            let value: serde_json::Value =
+                serde_json::from_str(&render_json_for_primary(&[projected], None)).unwrap();
+            value["entries"][0].clone()
+        };
+        let reset_block = |entry: &serde_json::Value| {
+            entry["sections"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|section| section["type"] == "block" && section["label"] == "Reset credits")
+                .cloned()
+        };
+
+        let zero = entry_for(Some(ResetCredits::default()));
+        assert_eq!(zero["reset_credits"]["available"], 0);
+        assert_eq!(zero["reset_credits"]["credits"], serde_json::json!([]));
+        assert_eq!(
+            reset_block(&zero).unwrap()["body"],
+            serde_json::json!(["None available"])
+        );
+
+        let absent = entry_for(None);
+        assert!(absent["reset_credits"].is_null());
+        assert!(reset_block(&absent).is_none());
     }
 
     /// The sidebar reads `reset_credits` off the entry, so Claude's grant has
