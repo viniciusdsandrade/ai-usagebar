@@ -78,7 +78,9 @@ pub struct AnthropicSnapshot {
     /// from the API (`scope.model.display_name`), so new models show up
     /// without a code change. Empty when the account has none.
     pub scoped: Vec<ScopedWindow>,
-    /// `None` when `extra_usage.is_enabled` is false or the block is absent.
+    /// `None` when the block is absent, the user disabled extra usage, or the
+    /// response has no spend worth reporting. Provider-disabled exhausted
+    /// usage stays visible with an explicit status.
     pub extra: Option<ExtraUsage>,
     /// Banked limit resets from the `cedar_ember` block — the same idea as
     /// Codex's rate-limit reset credits and SuperGrok's remaining resets.
@@ -112,6 +114,17 @@ pub struct ExtraUsage {
     /// JPY/KRW = 0). `None` means the wire did not report the scale. We keep
     /// that absence instead of guessing from an incomplete currency table.
     pub decimal_places: Option<u32>,
+    /// Why extra usage cannot currently continue. Enabled usage has `Active`.
+    pub status: ExtraUsageStatus,
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum ExtraUsageStatus {
+    #[default]
+    Active,
+    OutOfCredits,
+    MonthlyLimitReached,
+    Unavailable,
 }
 
 impl ExtraUsage {
@@ -133,6 +146,15 @@ impl ExtraUsage {
 
     pub fn fmt_limit(&self) -> Option<String> {
         self.limit.map(|l| self.fmt_amount(l))
+    }
+
+    pub fn status_note(&self) -> Option<&'static str> {
+        match self.status {
+            ExtraUsageStatus::Active => None,
+            ExtraUsageStatus::OutOfCredits => Some("out of credits"),
+            ExtraUsageStatus::MonthlyLimitReached => Some("monthly limit reached"),
+            ExtraUsageStatus::Unavailable => Some("currently unavailable"),
+        }
     }
 
     fn fmt_amount(&self, amount: Cents) -> String {
@@ -595,6 +617,8 @@ pub struct MinimaxSnapshot {
 pub struct AnthropicApiSnapshot {
     pub spent: f64,
     pub limit: Option<f64>,
+    /// Last UTC calendar day fully covered by the daily cost buckets.
+    pub covered_through: Option<chrono::NaiveDate>,
 }
 
 impl Eq for AnthropicApiSnapshot {}
@@ -606,6 +630,20 @@ impl AnthropicApiSnapshot {
         self.limit
             .filter(|l| l.is_finite() && *l > 0.0)
             .map(|l| ((self.spent / l) * 100.0).round().clamp(0.0, 9999.0) as i32)
+    }
+
+    pub fn coverage_label(&self) -> String {
+        let Some(date) = self.covered_through else {
+            return "Completed daily buckets this month".into();
+        };
+        const MONTHS: [&str; 12] = [
+            "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+        ];
+        let month = MONTHS[chrono::Datelike::month0(&date) as usize];
+        format!(
+            "Month to date (through {month} {})",
+            chrono::Datelike::day(&date)
+        )
     }
 }
 
@@ -1171,6 +1209,7 @@ mod tests {
                 spent: Cents(spent),
                 currency: None,
                 decimal_places: Some(2),
+                status: ExtraUsageStatus::Active,
             }),
             reset_credits: Default::default(),
         }
@@ -1198,6 +1237,7 @@ mod tests {
             spent: Cents(14157),
             currency: Some("BRL".into()),
             decimal_places: Some(2),
+            status: ExtraUsageStatus::Active,
         };
         assert_eq!(e.fmt_spent(), "R$141.57");
         assert_eq!(e.fmt_limit(), None);
@@ -1207,6 +1247,7 @@ mod tests {
             spent: Cents(250),
             currency: None,
             decimal_places: Some(2),
+            status: ExtraUsageStatus::Active,
         };
         assert_eq!(capped.fmt_spent(), "$2.50");
         assert_eq!(capped.fmt_limit().as_deref(), Some("$50.00"));
@@ -1220,6 +1261,7 @@ mod tests {
                 spent: Cents(100),
                 currency: None,
                 decimal_places: Some(2),
+                status: ExtraUsageStatus::Active,
             }
             .percent(),
             0
@@ -1235,6 +1277,7 @@ mod tests {
                 spent: Cents(3333),
                 currency: None,
                 decimal_places: Some(2),
+                status: ExtraUsageStatus::Active,
             }
             .percent(),
             33

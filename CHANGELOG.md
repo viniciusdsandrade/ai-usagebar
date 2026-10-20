@@ -1,5 +1,50 @@
 ## [Unreleased]
 
+## [1.41.0] — 2026-10-18
+
+### Changed
+
+- **A critical quota toast now asks `notify-send` for a 30-second timeout**
+  (`-t 30000`), so a 100% alert can expire on its own. Omarchy's notification
+  plugin treats critical urgency as immortal and throws the sender's timeout
+  away, so this changes nothing there until
+  [omacom/omarchy#12964](https://github.com/omacom/omarchy/pull/12964) lands;
+  that honours a positive timeout capped at 30s, while a critical toast sent
+  without one still stays until dismissed. Daemons that already honour `-t`
+  start expiring it now. Normal toasts still leave the timeout to the daemon.
+
+### Fixed
+
+- **Anthropic API spend states exactly how current it is.** The cost endpoint
+  returns completed daily buckets, so its total can omit today's activity. The
+  card and tooltip now show the last fully covered UTC day instead of implying
+  that the figure includes the live day (#459).
+
+- **Claude extra-usage spend stays visible when credits run out.** The API
+  marks provider-disabled extra usage as inactive at the moment its status and
+  month-to-date spend matter most. The row now distinguishes that state from a
+  user-disabled setting and explains whether credits or the monthly limit ran
+  out (#456).
+
+- **Nous Research credit amounts format as USD in detail lines and tooltips.**
+  Credit balances on the popover and TUI cards, the card detail rows, and the
+  Waybar tooltip now format with a currency sign through the shared USD helper
+  rather than printing bare numbers. The `{nous_balance}` and `{balance}`
+  placeholders now surface the total usable credits formatted as USD (#457).
+
+### Added
+
+- **KDE Plasma can hide individual metrics per provider.** Configure now lists
+  each provider's reported metrics. A disabled metric leaves the popup, compact
+  panel, tooltip, headline and card severity, while the final visible metric
+  stays locked so an applet cannot become blank (#460).
+
+- **Custom providers can format metric footnotes and text rows as money.** An
+  optional `currency` setting on `[[custom.metrics]]` and `[[custom.texts]]`
+  accepts a three-letter uppercase currency code (such as `"USD"` or `"EUR"`) and
+  formats the amounts through the program's standard money formatter, matching
+  built-in money rows instead of displaying bare numbers.
+
 ## [1.40.1] — 2026-10-17
 
 ### Fixed
@@ -4604,7 +4649,8 @@ vendors. Highlights:
 - Live API smoke test suite (`make smoke`) that exercises the real
   undocumented endpoints to detect schema drift before users do.
 
-[Unreleased]: https://github.com/akitaonrails/ai-usagebar/compare/v1.40.1...HEAD
+[Unreleased]: https://github.com/akitaonrails/ai-usagebar/compare/v1.41.0...HEAD
+[1.41.0]: https://github.com/akitaonrails/ai-usagebar/compare/v1.40.1...v1.41.0
 [1.40.1]: https://github.com/akitaonrails/ai-usagebar/compare/v1.40.0...v1.40.1
 [1.40.0]: https://github.com/akitaonrails/ai-usagebar/compare/v1.39.1...v1.40.0
 [1.39.1]: https://github.com/akitaonrails/ai-usagebar/compare/v1.39.0...v1.39.1
