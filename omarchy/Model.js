@@ -537,6 +537,8 @@ function brandFileFor(provider) {
       return "copilot.svg"
     case "devin":
       return "devin.svg"
+    case "droid":
+      return "droid.svg"
     case "zai":
       return "zhipu.svg"
     case "openrouter":
@@ -1810,6 +1812,28 @@ function toggleBarEntry(hidden, id) {
   return ids.indexOf(id) >= 0
     ? ids.filter(function(value) { return value !== id })
     : ids.concat([id])
+}
+
+// Wheel and middle-click step through the entries the bar is showing.
+// `selectedId` is the panel selection. When that entry was hidden, the bar
+// is showing the first entry of `entries`, so the step starts there.
+function adjacentBarEntryId(entries, selectedId, delta) {
+  var list = Array.isArray(entries) ? entries : []
+  var step = Number(delta) || 0
+  if (list.length === 0 || step === 0) return ""
+  var current = -1
+  for (var i = 0; i < list.length; i++) {
+    if (list[i] && list[i].id === selectedId) {
+      current = i
+      break
+    }
+  }
+  if (current < 0) current = 0
+  var next = (current + step) % list.length
+  if (next < 0) next += list.length
+  var entry = list[next]
+  return entry && entry.id !== undefined && entry.id !== null && entry.id !== ""
+    ? String(entry.id) : ""
 }
 
 function providerDisplaySummary(rows) {

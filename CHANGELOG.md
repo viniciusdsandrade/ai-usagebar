@@ -1,5 +1,111 @@
 ## [Unreleased]
 
+### Fixed
+
+- **Cursor still reads the IDE session after 3.27.12's opaque token.** That
+  release replaced the `cursorAuth/accessToken` JWT with an opaque `curs…`
+  string, so the provider's claim decoding failed and reported "session token
+  could not be decoded" for a signed-in IDE (#503). The account identity now
+  comes from `cursorAuth/cachedScopedProfile`'s `authId` — the same
+  `issuer|userId` value the JWT's `sub` used to carry — and the session cookie
+  is built exactly as before from that id and the token, whatever its format.
+  A JWT is still preferred when present, and an opaque token with no cached
+  profile keeps the original sign-in error.
+
+## [1.44.0] — 2026-10-25
+
+### Added
+
+- **Omarchy development now has repeatable visual and accessibility checks.**
+  A headless Quickshell harness renders the real settings view in deterministic
+  dark and light scenarios, while the normal plugin test guards keyboard
+  reachability, activation, focus, and labels for custom controls.
+- **The GNOME Shell preferences list OpenCode Go.** Its Vendors tab now shows the
+  provider's login state and can open `opencode auth login`; the Top bar vendors
+  section can also pin OpenCode Go's rolling and weekly windows next to the clock.
+- **Multiple Devin accounts via `[[devin.accounts]]`.** Named accounts appear
+  as individual tabs and cards across the TUI, reports, Waybar widget
+  (`--vendor devin --account <label>`), native Omarchy Quattro panels, and the
+  macOS menu bar. Each account runs with its own credentials file and isolated
+  cache directory (`devin/<label>/`), avoiding login-rebinding and lock
+  collisions.
+
+- **SuperGrok shows additional usage past the included pool.** When the Grok
+  CLI billing document reports on-demand spend or a cap, the tooltip, TUI, and
+  `usage --json` show it as "Additional usage" (`{sgk_on_demand}`). A zero pair
+  stays hidden. This is the same figure the CLI's `/usage` command reads. xAI
+  does not publish a docs.x.ai endpoint for the SuperGrok weekly pool; the
+  widget still uses an existing `grok login`. See `docs/grok.md`.
+
+- **Factory Droid subscription quota (`--vendor droid`, opt-in).** Reuses the
+  login the official `droid` CLI keeps on Linux: the `~/.factory/auth.v2.keyring`
+  session is opened with the `Factory CLI/auth-encryption-key` Secret Service
+  item, read-only — ai-usagebar never logs in, renews the JWT, or writes the
+  credential back. Near expiry it runs `droid doctor --checks auth` so the CLI
+  renews its own login (no model call, at most every 15 minutes;
+  `cli_renewal = false` turns it off), and an expired login it cannot renew is
+  reported as "run `droid` once". The bar shows the busiest active Standard
+  window and the panel lists the Standard 5-hour/weekly/monthly windows, the
+  Droid Core bucket, and the extra-usage balance. Other `auth.v2.*` stores and
+  non-Linux platforms fail closed. Enable with `[droid] enabled = true`.
+
+### Fixed
+
+- **A stale Kimi OAuth holder can no longer delete its replacement lock.** A
+  refresh process delayed past the lock's five-second staleness threshold
+  resumes to find another process has already stolen and rebuilt the lock
+  directory; releasing the old guard used to delete that live replacement
+  (and its heartbeat kept touching it), letting a third caller acquire the
+  same credential while it was genuinely held. Each acquisition now writes a
+  unique owner marker into the lock directory; the heartbeat stops touching a
+  directory it no longer owns, and release only removes a directory that
+  still carries the holder's own marker (#495).
+- **An active HTTP 429 backoff survives an Anthropic API month rollover.**
+  A cached spend from the previous UTC month is correctly rejected as a
+  different figure, but the rejection made every refresh fall through to a
+  live request even while the shared five-minute backoff was armed — a
+  refresh interval shorter than the backoff would re-request and re-arm
+  forever. When the cached figure is unusable and a backoff is active, the
+  refresh now surfaces the shared countdown without contacting the server;
+  last month's spend stays rejected (#496).
+- **Google Antigravity authentication rejection does not serve stale quota.**
+  When discovery or the remote quota endpoint receives HTTP 401 or 403, the
+  widget surfaces the error immediately instead of falling back to a stale
+  cache payload and presenting full weekly windows alongside the failure (#500).
+
+- **Google Antigravity default format omits absent session window.**
+  When Antigravity reports only weekly buckets, the default bar format renders
+  only the weekly percentage slot instead of leaving a bare `%` where the
+  absent session percentage would be (#500).
+
+- **Clearing an API key also removes it from a TOML inline table.** The TUI
+  settings overlay and native settings bridge previously reported success
+  while leaving the key in a provider configured as `zai = { ... }`.
+  Clearing now preserves the table's other fields and comments while removing
+  the saved key.
+
+- **The KDE plasmoid no longer uses object spread in its logic module.** QML's V4
+  engine rejects the ES2018 spread syntax with "Unexpected token `...`", which
+  prevented the widget from loading. Properties are now copied explicitly, and a
+  test guards against regression.
+
+- **Nous Research Waybar widget shows loading state on transient fetch errors.**
+  When a live account refresh fails with a transient transport error or HTTP
+  5xx status, the Waybar widget returns the standard loading state instead of
+  falling back to the warning indicator (#498).
+
+- **OpenCode 2 Go logins are detected under their current provider id.** The
+  CLI stores the Go integration as `opencode-go`; ai-usagebar only looked for
+  the legacy `opencode` row, so a signed-in user still appeared as “OpenCode Go
+  is not signed in.” Both ids are now read, preferring the Go row and falling
+  back to a usable legacy row when the Go credential is expired or malformed.
+
+- **Omarchy's bar scroll and middle-click skip providers hidden from the bar.**
+  Hiding an entry leaves it in the usage panel, but the bar's wheel and
+  middle-click walked every panel entry. Landing on a hidden one snapped the
+  bar back to the first provider still on display instead of the next one.
+  Those gestures now move among the providers the bar is showing (#489).
+
 ## [1.43.0] — 2026-10-22
 
 ### Added
@@ -4759,7 +4865,8 @@ vendors. Highlights:
 - Live API smoke test suite (`make smoke`) that exercises the real
   undocumented endpoints to detect schema drift before users do.
 
-[Unreleased]: https://github.com/akitaonrails/ai-usagebar/compare/v1.43.0...HEAD
+[Unreleased]: https://github.com/akitaonrails/ai-usagebar/compare/v1.44.0...HEAD
+[1.44.0]: https://github.com/akitaonrails/ai-usagebar/compare/v1.43.0...v1.44.0
 [1.43.0]: https://github.com/akitaonrails/ai-usagebar/compare/v1.42.0...v1.43.0
 [1.42.0]: https://github.com/akitaonrails/ai-usagebar/compare/v1.41.0...v1.42.0
 [1.41.0]: https://github.com/akitaonrails/ai-usagebar/compare/v1.40.1...v1.41.0

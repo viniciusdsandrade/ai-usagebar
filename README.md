@@ -1,6 +1,6 @@
 # ai-usagebar
 
-Native Omarchy Quattro panel, Waybar widget, and tabbed TUI for AI plan usage across **Claude**, **Codex/ChatGPT**, **GitHub Copilot**, **Z.AI (GLM)**, **OpenRouter**, **DeepSeek**, **DeepInfra**, **Kimi**, **Nous Research**, **OpenCode Go**, **Command Code**, **Devin**, **Cline**, **Muse Code**, **Synthetic**, and other supported AI coding services.
+Native Omarchy Quattro panel, Waybar widget, and tabbed TUI for AI plan usage across **Claude**, **Codex/ChatGPT**, **GitHub Copilot**, **Z.AI (GLM)**, **OpenRouter**, **DeepSeek**, **DeepInfra**, **Kimi**, **Nous Research**, **OpenCode Go**, **Command Code**, **Devin**, **Cline**, **Muse Code**, **Droid**, **Synthetic**, and other supported AI coding services.
 
 ai-usagebar began as a Rust port of
 [`claudebar`](https://github.com/mryll/claudebar) and remains drop-in
@@ -260,8 +260,8 @@ the popover's language. On its first run the
 tray detects which vendors already have a credential on this PC (local files
 and keys only, never the network) and enables eligible vendors in
 `config.toml` — it never turns a vendor off. Opt-in-only providers such as
-Devin are never activated by automatic detection, including **Detect Providers**;
-enable Devin explicitly in Settings or with `[devin] enabled = true`. Settings
+Devin and Droid are never activated by automatic detection, including **Detect Providers**;
+enable them explicitly in Settings or with `[devin]`/`[droid] enabled = true`. Settings
 adds a global shortcut that toggles the popover from anywhere, the poll interval,
 and an update mode
 (Automatic / Notify me / Off) that installs new releases from GitHub after
@@ -301,7 +301,7 @@ come from environment variables or `config.toml`.
 | OrcaRouter | API key (`ORCAROUTER_API_KEY` env or `[orcarouter] api_key` in config) | Set either. Opt-in. Reports the credit card (spend / total limit / remaining, key expiry) from the one-api compatible dashboard billing endpoints. |
 | Moonshot | API key (`MOONSHOT_API_KEY` or config) | Opt in. Set region `cn` for CNY; `global` uses USD. |
 | Grok (xAI) | Management key | Opt in with `XAI_MANAGEMENT_KEY` or config. An inference key does not work. |
-| SuperGrok | Existing `grok login` (its `auth.json` key, or its ACP extension) | Opt in, install Grok Build, and run `grok login`. This reports subscription usage — overall included credits plus per-product slices (Build, Chat, Imagine) — not the Management API balance. |
+| SuperGrok | Existing `grok login` (its `auth.json` key, or its ACP extension) | Opt in, install the official Grok CLI, and run `grok login`. This reports the consumer subscription pool — included usage, reset, per-product slices, and additional usage when billed. The Management API balance is a separate row. [Setup and limits](docs/grok.md). |
 | Grok Bot | Existing Grok Bot desktop sign-in (Linux and macOS) | Opt in, install the Grok Bot desktop app, and sign in to it once. This reports the app's weekly included-usage pool — not the Management API balance, and not the Grok Build subscription. Refreshed tokens stay in ai-usagebar's cache; the app's own file is never written. |
 | MiniMax | Token Plan subscription key | Opt in with `MINIMAX_API_KEY` or config. Choose the matching global or China region; pay-as-you-go keys do not work. |
 | Google Antigravity | Local Antigravity server, `agy` itself, saved Google session, or `agy` status line | Opt in. The desktop products provide quota through their local server. With the `agy` CLI installed, quota is read from `agy -p "/quota"` — the figures its own Models & Quota page shows — at most every two minutes. The `agy` CLI can also provide its live session quotas through the macOS status-line integration (see [Multiple Antigravity CLI accounts](#multiple-antigravity-cli-accounts-macos)); the saved-session Cloud Code API fallback answers when neither can, and is labelled `Google API` in the TUI. |
@@ -312,6 +312,7 @@ come from environment variables or `config.toml`.
 | Command Code | Existing `commandcode` or pi login | Enable `[commandcode]` and sign in to either one once. No key to paste; `COMMANDCODE_API_KEY` overrides if you prefer one. |
 | Model Studio | Existing `bl auth login --console` (Alibaba Cloud) | Opt in (`[modelstudio]`), install the official `bl` CLI, and run `bl auth login --console` once. Reports the Token Plan's 5-hour, weekly and monthly percentage windows with resets, through the same console gateway the CLI uses; the credential file `~/.bailian/config.json` is only ever read. |
 | Devin | Existing official Devin CLI login | Opt in (`[devin]`) after signing in with the Devin CLI. Reuses its existing `credentials.toml` read-only; ai-usagebar never logs in, refreshes, or writes credentials. Reports daily and weekly quota usage and an optional overage balance. |
+| Droid (Factory) | Existing `droid` CLI login | Opt in (`[droid]`) after signing in with `droid` on Linux. Reuses the CLI's `~/.factory/auth.v2.keyring` login read-only — the Secret Service key never leaves the keyring and ai-usagebar never refreshes or writes the token; near expiry it asks the CLI to renew its own login (`droid doctor --checks auth`). Reports Standard 5-hour/weekly/monthly windows, the Droid Core bucket, and the extra-usage balance. |
 | Cline / ClinePass | Existing `cline` CLI login | Enable `[cline]`. No key to paste; the CLI's own credential is reused. `CLINE_API_KEY` overrides it. |
 | Muse Code | Existing file-based Muse CLI OAuth login | Enable `[muse-code]` after `muse login`. Reports subscription session/weekly quota and resets. Credentials are read only; Meta can omit quotas while the session window is idle. [Setup and limitations](docs/muse-code.md). |
 
@@ -423,6 +424,10 @@ team_id = "your-team-id"
 Without it, an organization-scoped key reports an error saying exactly this
 rather than silently querying the wrong URL.
 
+That balance is **xAI API team credit**. The SuperGrok weekly pool is the
+separate `[supergrok]` provider. Setup and the limits of each path are in
+[docs/grok.md](docs/grok.md).
+
 #### Giving a prepaid balance a tank
 
 DeepSeek, DeepInfra, Kilo, Novita, Moonshot and prepaid Grok report money **left** and no
@@ -453,7 +458,8 @@ installs are unaffected until you opt in. Use either method:
 - Use the gear or `s` in the Omarchy panel, or run
   `ai-usagebar-tui` and press `s`. Saving a non-empty API key sets that vendor's
   `enabled = true` for you. Clearing it removes the inline key from
-  `config.toml`.
+  `config.toml`, including when the provider uses a TOML inline table such as
+  `zai = { api_key = "..." }`.
 - Add `enabled = true` to the vendor's config section alongside the key.
 
 The primary-vendor selector only offers enabled vendors, except GitHub Copilot:
@@ -970,7 +976,7 @@ Quattro: one chip with the selected provider's logo, short name and highest perc
 | Integration | Supported providers | Notes |
 |---|---|---|
 | [macOS menu bar](macos/README.md) | Whatever `usage --json` reports | `ai-usagebar-tray`: WKWebView popover + each ready provider's name and usage with a chart glyph. |
-| [GNOME Shell](gnome-extension/README.md) | Menu: whatever `usage --json` reports. Top bar: Claude, Codex, Z.AI, OpenRouter, DeepSeek, Antigravity | Usage overview with native provider submenus and configurable appearance; the top bar shows one indicator per provider switched on, optionally with pace arrows instead of bars. |
+| [GNOME Shell](gnome-extension/README.md) | Menu: whatever `usage --json` reports. Top bar: Claude, Codex, OpenCode Go, Z.AI, OpenRouter, DeepSeek, Antigravity | Usage overview with native provider submenus and configurable appearance; the top bar shows one indicator per provider switched on, optionally with pace arrows instead of bars. |
 | [KDE Plasma 6](kde-plasmoid/README.md) | Whatever `usage --json` reports | Provider tabs in the popup; vendor is per applet instance. |
 | [Linux Mint / Cinnamon](linux-mint/README.md) | Whatever `usage --json` reports | Experimental GTK dashboard with provider icons; left-click the status icon. |
 | [Windows tray](windows/README.md) | Whatever `usage --json` reports | NotifyIcon + WebView2 popover; left-click the tray icon. |
@@ -1106,6 +1112,27 @@ ai-usagebar --vendor openai --account work
 
 Each account keeps its own cache and refreshes independently. Without
 `--account`, the default `codex_auth_path` login is used exactly as before.
+
+### Multiple Devin accounts
+
+Two Devin CLI subscriptions or logins, each in its own directory:
+
+```bash
+XDG_DATA_HOME=~/.devin-work devin auth login
+```
+
+```toml
+[[devin.accounts]]
+label = "work"
+credentials_path = "~/.devin-work/devin/credentials.toml"
+```
+
+```bash
+ai-usagebar --vendor devin --account work
+```
+
+Each account keeps its own isolated cache and refreshes independently. Without
+`--account`, the default `credentials_path` login is used.
 
 ### Multiple Claude accounts
 

@@ -11,7 +11,7 @@
 # Valid: anthropic | anthropic_api | openai | copilot | zai | openrouter | deepseek
 #        | kimi | kilo | novita | moonshot | grok | supergrok | grokbot | antigravity
 #        | cursor | minimax | kiro | nous | opencode-go | commandcode | ollama
-#        | orcarouter | modelstudio | lyceum | devin | cline | muse-code | synthetic
+#        | orcarouter | modelstudio | lyceum | devin | cline | muse-code | droid | synthetic
 # When unset, the TUI opens on the Overview (all vendors at once); set this to
 # open directly on a vendor's tab instead.
 # primary = "anthropic"
@@ -463,16 +463,18 @@ api_key_env = "XAI_MANAGEMENT_KEY" # checked first; if set + non-empty, used
 # headline = "amount"              # "amount" | "percent"
 
 # SuperGrok subscription usage — distinct from [grok] above. No API key of
-# its own: the official Grok Build CLI owns login, OIDC/provider refresh,
-# account scope, proxy settings, and credential locking. Billing and banked
-# resets use the `key` already in auth.json (read-only, sent in an
-# Authorization header, never copied or rewritten). The ACP `x.ai/billing`
-# extension is a fallback when the HTTPS billing endpoint is unavailable.
+# its own: the official Grok CLI owns login, OIDC refresh, account scope,
+# and credential locking. Billing uses the `key` already in auth.json
+# (read-only, sent in an Authorization header, never copied or rewritten).
+# The HTTPS call is the one the CLI makes for `/usage`; the ACP `x.ai/billing`
+# extension is the fallback. See docs/grok.md. docs.x.ai has no route for
+# this weekly pool.
 [supergrok]
-# Disabled by default — enable after installing official Grok Build and running
-# `grok login` at least once. This is included *usage* (overall % plus
-# Build/Chat/Imagine slices from the billing document), not the `[grok]`
-# Management API prepaid dollar balance.
+# Disabled by default — enable after installing the official Grok CLI and
+# running `grok login` once. This is included usage (overall % plus
+# Build/Chat/Imagine slices, and additional usage when the billing document
+# reports on-demand spend or a cap). The `[grok]` row is Management API
+# prepaid dollars, a different bill.
 enabled = false
 # Defaults to $GROK_HOME/bin/grok or ~/.grok/bin/grok, avoiding unrelated PATH
 # programs with the same name. Override only for a trusted official install.
@@ -648,6 +650,24 @@ enabled = false
 [devin]
 enabled = false
 # credentials_path = "/home/you/.local/share/devin/credentials.toml"
+# show_default_account = true
+#
+# [[devin.accounts]]
+# label = "work"
+# credentials_path = "~/.zapdevin/devin/credentials.toml"
+
+# Factory Droid (`droid` CLI) subscription quota. Reuses the login the
+# CLI already holds: the session in ~/.factory/auth.v2.keyring is opened
+# with the `Factory CLI/auth-encryption-key` Secret Service item, read-only.
+# Linux only — the other auth.v2.* stores and other platforms' storage are
+# not supported. ai-usagebar never refreshes or writes the token itself.
+# Near expiry it runs `droid doctor --checks auth` (no model call, at most
+# every 15 minutes), which makes the CLI renew its own login; with that off,
+# or when it fails, an expired login tells you to run `droid` once.
+[droid]
+enabled = false
+# cli_renewal = true
+# cli_path = "/home/you/.local/bin/droid"   # default: `droid` on PATH
 
 # Muse Code subscription quota. Requires the official CLI's existing
 # file-based OAuth login and already-issued key; neither is rewritten.

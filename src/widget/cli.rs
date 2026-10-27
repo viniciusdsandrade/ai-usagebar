@@ -121,12 +121,12 @@ pub struct Cli {
     #[arg(long, value_name = "FILE")]
     pub creds_path: Option<std::path::PathBuf>,
 
-    /// Select a named Claude, Codex (OpenAI), or API-key vendor (Z.AI,
-    /// OpenRouter, DeepSeek, Kilo, Novita, Moonshot, Grok, MiniMax, OrcaRouter,
-    /// Lyceum) account from the matching `[[...accounts]]` config array. Without it,
-    /// the vendor's default account
-    /// and original cache path are unchanged. For Claude it conflicts with the
-    /// lower-level `--creds-path` because both select a credential source.
+    /// Select a named Claude, Codex (OpenAI), GitHub Copilot, Devin, or API-key
+    /// vendor (Z.AI, OpenRouter, DeepSeek, Kilo, Novita, Moonshot, Grok, MiniMax,
+    /// OrcaRouter, Lyceum) account from the matching `[[...accounts]]` config array.
+    /// Without it, the vendor's default account and original cache path are
+    /// unchanged. For Claude it conflicts with the lower-level `--creds-path`
+    /// because both select a credential source.
     #[arg(long, value_name = "LABEL", conflicts_with = "creds_path")]
     pub account: Option<String>,
 
@@ -432,6 +432,7 @@ pub enum Vendor {
     Devin,
     MuseCode,
     Cline,
+    Droid,
 }
 
 impl Vendor {
@@ -467,6 +468,7 @@ impl Vendor {
             Vendor::Devin => crate::vendor::VendorId::Devin,
             Vendor::MuseCode => crate::vendor::VendorId::MuseCode,
             Vendor::Cline => crate::vendor::VendorId::Cline,
+            Vendor::Droid => crate::vendor::VendorId::Droid,
         }
     }
 }
@@ -569,6 +571,7 @@ fn id_to_vendor(id: crate::vendor::VendorId) -> Vendor {
         crate::vendor::VendorId::Devin => Vendor::Devin,
         crate::vendor::VendorId::MuseCode => Vendor::MuseCode,
         crate::vendor::VendorId::Cline => Vendor::Cline,
+        crate::vendor::VendorId::Droid => Vendor::Droid,
     }
 }
 

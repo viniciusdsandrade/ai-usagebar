@@ -30,7 +30,7 @@ ai-usagebar-tui --config ./config.test.toml
 #                         # | zai | openrouter | deepseek | deepinfra | kimi | kilo | novita
 #                         # | moonshot | grok | supergrok | grokbot | antigravity | cursor
 #                         # | minimax | kiro | nous | opencode-go | commandcode
-#                         # | orcarouter | modelstudio | lyceum | devin | cline | muse-code
+#                         # | orcarouter | modelstudio | lyceum | devin | cline | muse-code | droid
 # Which vendors the Overview lists, in this order. The TUI tab bar leads with
 # the same list; enabled vendors left off it follow in the canonical order.
 # Omit for every enabled vendor. A repeated slug keeps its first occurrence;
@@ -195,12 +195,14 @@ api_key_env = "XAI_MANAGEMENT_KEY"
 
 [supergrok]
 enabled = true             # disabled by default; enable once you've run `grok login`
-# Included usage from Grok Build billing (overall % plus productUsage slices).
-# Distinct from `[grok]`, which is Management API prepaid dollars.
-# No API key of its own: billing and banked resets use the `key` already in
-# its auth.json (read-only, sent in an Authorization header, never copied or
-# rewritten). Billing is Grok Build's documented HTTPS endpoint, or its ACP
-# process as fallback; remaining resets are a separate grok.com RPC.
+# Included usage from the official Grok CLI's `/usage` billing call (overall
+# % plus product slices, and additional usage when the document reports it).
+# Distinct from `[grok]`, which is Management API prepaid dollars — that API
+# does not report the SuperGrok weekly pool. See docs/grok.md.
+# No API key of its own: billing uses the `key` already in auth.json
+# (read-only, sent in an Authorization header, never copied or rewritten).
+# Billing is the CLI's HTTPS endpoint, or its ACP process as fallback;
+# remaining resets are a separate grok.com RPC that can fail on its own.
 # Defaults to $GROK_HOME/bin/grok or ~/.grok/bin/grok. Override only when the
 # trusted official binary was installed elsewhere.
 # grok_binary = "/opt/grok/bin/grok"
@@ -286,7 +288,34 @@ enabled = false            # disabled by default; enable after signing in with D
 # (the CLI's documented paths; macOS is untested here).
 # An explicit credentials_path needs no home directory to resolve.
 # credentials_path = "/home/you/.local/share/devin/credentials.toml"
+# show_default_account = true
+#
+# [[devin.accounts]]
+# label = "work"
+# credentials_path = "~/.zapdevin/devin/credentials.toml"
+[droid]
+enabled = false            # disabled by default; enable after signing in with `droid` on Linux
+# Factory Droid subscription quota. Reuses the login the official `droid` CLI
+cli_renewal = true         # near expiry, let the `droid` CLI renew its own login
+# cli_path = "/home/you/.local/bin/droid"   # default: `droid` on PATH
 ```
+
+The CLI's access token lasts about a day and the CLI renews it only when it
+runs. With `cli_renewal` on, a login within 10 minutes of expiry makes
+ai-usagebar run `droid doctor --checks auth --timeout 10000` — the CLI's own
+auth check, which renews and saves the session through Factory's sign-in
+service without calling a model. It runs with stdin closed, its output
+discarded, provider secrets removed from its environment, a 30-second limit,
+and at most once every 15 minutes. If it is off or the CLI cannot renew
+(signed out, offline, `droid` not on the bar's `PATH`), the bar keeps the last
+reading and says to run `droid` once.
+
+Droid remains opt-in when its CLI login is present. First-run detection and
+`detect --all` do not enable it; set `enabled = true` explicitly to activate
+the provider. It reports the Standard quota's 5-hour, weekly and monthly
+windows plus the Droid Core bucket and the extra-usage balance. A window the
+account has not started reads "Not started", and a Droid Core bucket that was
+never used collapses to one "not used yet" row.
 
 Devin remains opt-in when its CLI login is present. First-run detection and
 `detect --all` do not enable it; set `enabled = true` explicitly to activate
@@ -300,6 +329,22 @@ shown as fully used. Its optional
 the tested account; that currency interpretation is not a verified universal
 contract. The existing CLI token is read only for the status request and cache
 identity. ai-usagebar does not sign in, refresh, or rewrite Devin credentials.
+
+For more than one Devin CLI login, add `[[devin.accounts]]` — a label and that
+login's own `credentials.toml`:
+
+```toml
+[[devin.accounts]]
+label = "work"
+credentials_path = "~/.devin-work/devin/credentials.toml"
+```
+
+Create the second login with `XDG_DATA_HOME=~/.devin-work devin auth login` (or
+a shell function / alias wrapping `XDG_DATA_HOME`) and point `credentials_path`
+at the file it writes. Select it with `--account work`; each account keeps its own
+isolated cache under `~/.cache/ai-usagebar/devin/<label>`. The singular
+`credentials_path` remains the default account and appears alongside named
+accounts unless `show_default_account = false`.
 
 For more than one OpenRouter key, see the
 [OpenRouter account guide](openrouter-accounts.md). The existing singular
