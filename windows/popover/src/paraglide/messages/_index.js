@@ -14,7 +14,9 @@ import { getLocale, experimentalStaticLocale } from "../runtime.js"
 /** @typedef {{}} AboutInputs */
 /** @typedef {{}} About_Summary_Menu_BarInputs */
 /** @typedef {{}} About_Summary_TrayInputs */
+/** @typedef {{}} AccountsInputs */
 /** @typedef {{}} ActivityInputs */
+/** @typedef {{}} Add_AccountInputs */
 /** @typedef {{}} Add_Claude_Code_AccountInputs */
 /** @typedef {{}} Add_Claude_Desktop_AccountInputs */
 /** @typedef {{}} Add_Codex_AccountInputs */
@@ -58,6 +60,9 @@ import { getLocale, experimentalStaticLocale } from "../runtime.js"
 /** @typedef {{}} Click_To_Record_A_ShortcutInputs */
 /** @typedef {{}} CloseInputs */
 /** @typedef {{}} Connection_Retry_HintInputs */
+/** @typedef {{}} Copied_To_ClipboardInputs */
+/** @typedef {{}} Copy_As_ImageInputs */
+/** @typedef {{}} Copy_Image_FailedInputs */
 /** @typedef {{}} Couldn_T_Load_UsageInputs */
 /** @typedef {{}} Couldn_T_Read_Local_FilesInputs */
 /** @typedef {{}} Couldn_T_Read_Usage_DataInputs */
@@ -77,6 +82,7 @@ import { getLocale, experimentalStaticLocale } from "../runtime.js"
 /** @typedef {{}} Date_UnavailableInputs */
 /** @typedef {{ day: NonNullable<unknown>, time: NonNullable<unknown> }} Day_AtInputs */
 /** @typedef {{ days: NonNullable<unknown> }} Days_AgoInputs */
+/** @typedef {{}} Default_AccountInputs */
 /** @typedef {{}} Detect_ProvidersInputs */
 /** @typedef {{}} Development_BuildInputs */
 /** @typedef {{}} DismissInputs */
@@ -488,6 +494,22 @@ export const about_summary_tray = /** @type {((inputs?: About_Summary_TrayInputs
 /**
 * | output |
 * | --- |
+* | "Accounts" |
+*
+* @param {AccountsInputs} inputs
+* @param {{ locale?: "en" | "pt-BR" | "ko" | "es" }} options
+* @returns {LocalizedString}
+*/
+export const accounts = /** @type {((inputs?: AccountsInputs, options?: { locale?: "en" | "pt-BR" | "ko" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<AccountsInputs, { locale?: "en" | "pt-BR" | "ko" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
+	if (locale === "pt-BR") return __pt_br2.accounts(inputs)
+	if (locale === "ko") return __ko.accounts(inputs)
+	if (locale === "es") return __es.accounts(inputs)
+	return __en.accounts(inputs)
+});
+/**
+* | output |
+* | --- |
 * | "Activity" |
 *
 * @param {ActivityInputs} inputs
@@ -500,6 +522,22 @@ export const activity = /** @type {((inputs?: ActivityInputs, options?: { locale
 	if (locale === "ko") return __ko.activity(inputs)
 	if (locale === "es") return __es.activity(inputs)
 	return __en.activity(inputs)
+});
+/**
+* | output |
+* | --- |
+* | "Add account" |
+*
+* @param {Add_AccountInputs} inputs
+* @param {{ locale?: "en" | "pt-BR" | "ko" | "es" }} options
+* @returns {LocalizedString}
+*/
+export const add_account = /** @type {((inputs?: Add_AccountInputs, options?: { locale?: "en" | "pt-BR" | "ko" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Add_AccountInputs, { locale?: "en" | "pt-BR" | "ko" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
+	if (locale === "pt-BR") return __pt_br2.add_account(inputs)
+	if (locale === "ko") return __ko.add_account(inputs)
+	if (locale === "es") return __es.add_account(inputs)
+	return __en.add_account(inputs)
 });
 /**
 * | output |
@@ -1192,6 +1230,54 @@ export const connection_retry_hint = /** @type {((inputs?: Connection_Retry_Hint
 /**
 * | output |
 * | --- |
+* | "Copied to clipboard" |
+*
+* @param {Copied_To_ClipboardInputs} inputs
+* @param {{ locale?: "en" | "pt-BR" | "ko" | "es" }} options
+* @returns {LocalizedString}
+*/
+export const copied_to_clipboard = /** @type {((inputs?: Copied_To_ClipboardInputs, options?: { locale?: "en" | "pt-BR" | "ko" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Copied_To_ClipboardInputs, { locale?: "en" | "pt-BR" | "ko" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
+	if (locale === "pt-BR") return __pt_br2.copied_to_clipboard(inputs)
+	if (locale === "ko") return __ko.copied_to_clipboard(inputs)
+	if (locale === "es") return __es.copied_to_clipboard(inputs)
+	return __en.copied_to_clipboard(inputs)
+});
+/**
+* | output |
+* | --- |
+* | "Copy as image" |
+*
+* @param {Copy_As_ImageInputs} inputs
+* @param {{ locale?: "en" | "pt-BR" | "ko" | "es" }} options
+* @returns {LocalizedString}
+*/
+export const copy_as_image = /** @type {((inputs?: Copy_As_ImageInputs, options?: { locale?: "en" | "pt-BR" | "ko" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Copy_As_ImageInputs, { locale?: "en" | "pt-BR" | "ko" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
+	if (locale === "pt-BR") return __pt_br2.copy_as_image(inputs)
+	if (locale === "ko") return __ko.copy_as_image(inputs)
+	if (locale === "es") return __es.copy_as_image(inputs)
+	return __en.copy_as_image(inputs)
+});
+/**
+* | output |
+* | --- |
+* | "Could not copy the image" |
+*
+* @param {Copy_Image_FailedInputs} inputs
+* @param {{ locale?: "en" | "pt-BR" | "ko" | "es" }} options
+* @returns {LocalizedString}
+*/
+export const copy_image_failed = /** @type {((inputs?: Copy_Image_FailedInputs, options?: { locale?: "en" | "pt-BR" | "ko" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Copy_Image_FailedInputs, { locale?: "en" | "pt-BR" | "ko" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
+	if (locale === "pt-BR") return __pt_br2.copy_image_failed(inputs)
+	if (locale === "ko") return __ko.copy_image_failed(inputs)
+	if (locale === "es") return __es.copy_image_failed(inputs)
+	return __en.copy_image_failed(inputs)
+});
+/**
+* | output |
+* | --- |
 * | "Couldn't load usage" |
 *
 * @param {Couldn_T_Load_UsageInputs} inputs
@@ -1492,6 +1578,22 @@ export const days_ago = /** @type {((inputs: Days_AgoInputs, options?: { locale?
 	if (locale === "ko") return __ko.days_ago(inputs)
 	if (locale === "es") return __es.days_ago(inputs)
 	return __en.days_ago(inputs)
+});
+/**
+* | output |
+* | --- |
+* | "Default" |
+*
+* @param {Default_AccountInputs} inputs
+* @param {{ locale?: "en" | "pt-BR" | "ko" | "es" }} options
+* @returns {LocalizedString}
+*/
+export const default_account = /** @type {((inputs?: Default_AccountInputs, options?: { locale?: "en" | "pt-BR" | "ko" | "es" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Default_AccountInputs, { locale?: "en" | "pt-BR" | "ko" | "es" }, {}>} */ ((inputs = {}, options = {}) => {
+	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
+	if (locale === "pt-BR") return __pt_br2.default_account(inputs)
+	if (locale === "ko") return __ko.default_account(inputs)
+	if (locale === "es") return __es.default_account(inputs)
+	return __en.default_account(inputs)
 });
 /**
 * | output |

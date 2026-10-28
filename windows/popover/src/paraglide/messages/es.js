@@ -12,7 +12,9 @@
 /** @typedef {{}} AboutInputs */
 /** @typedef {{}} About_Summary_Menu_BarInputs */
 /** @typedef {{}} About_Summary_TrayInputs */
+/** @typedef {{}} AccountsInputs */
 /** @typedef {{}} ActivityInputs */
+/** @typedef {{}} Add_AccountInputs */
 /** @typedef {{}} Add_Claude_Code_AccountInputs */
 /** @typedef {{}} Add_Claude_Desktop_AccountInputs */
 /** @typedef {{}} Add_Codex_AccountInputs */
@@ -56,6 +58,9 @@
 /** @typedef {{}} Click_To_Record_A_ShortcutInputs */
 /** @typedef {{}} CloseInputs */
 /** @typedef {{}} Connection_Retry_HintInputs */
+/** @typedef {{}} Copied_To_ClipboardInputs */
+/** @typedef {{}} Copy_As_ImageInputs */
+/** @typedef {{}} Copy_Image_FailedInputs */
 /** @typedef {{}} Couldn_T_Load_UsageInputs */
 /** @typedef {{}} Couldn_T_Read_Local_FilesInputs */
 /** @typedef {{}} Couldn_T_Read_Usage_DataInputs */
@@ -75,6 +80,7 @@
 /** @typedef {{}} Date_UnavailableInputs */
 /** @typedef {{ day: NonNullable<unknown>, time: NonNullable<unknown> }} Day_AtInputs */
 /** @typedef {{ days: NonNullable<unknown> }} Days_AgoInputs */
+/** @typedef {{}} Default_AccountInputs */
 /** @typedef {{}} Detect_ProvidersInputs */
 /** @typedef {{}} Development_BuildInputs */
 /** @typedef {{}} DismissInputs */
@@ -328,8 +334,16 @@ export const about_summary_tray = /** @type {(inputs: About_Summary_TrayInputs) 
 	return /** @type {LocalizedString} */ (`Cuánto te queda de cada plan de IA — Claude, Codex, Cursor, Copilot y muchos más — directo en la bandeja del sistema, con horarios de reinicio y ritmo de uso para que un límite nunca te sorprenda a mitad de una tarea.`)
 };
 
+export const accounts = /** @type {(inputs: AccountsInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`Cuentas`)
+};
+
 export const activity = /** @type {(inputs: ActivityInputs) => LocalizedString} */ () => {
 	return /** @type {LocalizedString} */ (`Actividad`)
+};
+
+export const add_account = /** @type {(inputs: Add_AccountInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`Añadir cuenta`)
 };
 
 export const add_claude_code_account = /** @type {(inputs: Add_Claude_Code_AccountInputs) => LocalizedString} */ () => {
@@ -504,6 +518,18 @@ export const connection_retry_hint = /** @type {(inputs: Connection_Retry_HintIn
 	return /** @type {LocalizedString} */ (`Revisa tu conexión y vuelve a actualizar.`)
 };
 
+export const copied_to_clipboard = /** @type {(inputs: Copied_To_ClipboardInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`Copiado al portapapeles`)
+};
+
+export const copy_as_image = /** @type {(inputs: Copy_As_ImageInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`Copiar como imagen`)
+};
+
+export const copy_image_failed = /** @type {(inputs: Copy_Image_FailedInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`No se pudo copiar la imagen`)
+};
+
 export const couldn_t_load_usage = /** @type {(inputs: Couldn_T_Load_UsageInputs) => LocalizedString} */ () => {
 	return /** @type {LocalizedString} */ (`No se pudo cargar el uso`)
 };
@@ -578,6 +604,10 @@ export const day_at = /** @type {(inputs: Day_AtInputs) => LocalizedString} */ (
 
 export const days_ago = /** @type {(inputs: Days_AgoInputs) => LocalizedString} */ (i) => {
 	return /** @type {LocalizedString} */ (`hace ${i?.days} d`)
+};
+
+export const default_account = /** @type {(inputs: Default_AccountInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`Predeterminada`)
 };
 
 export const detect_providers = /** @type {(inputs: Detect_ProvidersInputs) => LocalizedString} */ () => {

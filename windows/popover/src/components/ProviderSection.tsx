@@ -3,6 +3,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import MdiAlert from "~icons/mdi/alert";
 import MdiChevronDown from "~icons/mdi/chevron-down";
 import MdiChevronUp from "~icons/mdi/chevron-up";
+import MdiContentCopy from "~icons/mdi/content-copy";
 import MdiFire from "~icons/mdi/fire";
 import MdiLoading from "~icons/mdi/loading";
 import MdiStar from "~icons/mdi/star";
@@ -14,6 +15,7 @@ import MdiClockStart from "~icons/mdi/clock-start";
 import MdiCheck from "~icons/mdi/check";
 import { Chip } from "@/components/Chip";
 import { Hint } from "@/components/Hint";
+import { AccountTabs } from "@/components/AccountTabs";
 import { ProviderIcon } from "@/components/ProviderIcon";
 import { ResetPopover } from "@/components/ResetPopover";
 import { RowMenu, type RowAction } from "@/components/RowMenu";
@@ -73,10 +75,19 @@ interface ProviderSectionProps {
   account?: CardAccount | null;
   card: Card;
   handle?: SectionHandle;
+  /** The provider's accounts, when it has two or more: the header reads the provider's name
+   * and the account tabs sit between the header and the card. */
+  group?: {
+    name: string;
+    cards: Array<{ id: string; title: string }>;
+    activeId: string;
+    onSelect: (id: string) => void;
+  };
   layout: Layout;
   lifted?: boolean;
   nowMs: number;
   onCustomize?: () => void;
+  onCopyImage?: () => void;
   onRowAction?: (key: string, action: RowAction) => void;
   onRowMenuOpenChange?: (open: boolean) => void;
   onSwitchAccount?: () => void;
@@ -96,10 +107,12 @@ export function ProviderSection({
   account,
   card,
   handle,
+  group,
   layout,
   lifted,
   nowMs,
   onCustomize,
+  onCopyImage,
   onRowAction,
   onRowMenuOpenChange,
   onSwitchAccount,
@@ -107,6 +120,9 @@ export function ProviderSection({
   onToggleShowAs,
 }: ProviderSectionProps) {
   const { language } = useI18n();
+  // A provider with several accounts titles its card after itself; the single-account
+  // screen — including the per-account desktop title — reads the card's own title.
+  const grouped = group && group.cards.length > 1;
   const prefs = prefsForCard(card, layout);
   const expanded = layout.collapsed?.[card.id] !== true;
   const opts = { hideExtras: layout.hideExtras, prefs };
@@ -166,8 +182,15 @@ export function ProviderSection({
         handle={handle}
         nowMs={nowMs}
         onCustomize={onCustomize}
+        onCopyImage={onCopyImage}
         onSwitchAccount={onSwitchAccount}
+        title={grouped ? group.name : undefined}
       />
+      {grouped ? (
+        <div className="px-[var(--card-pad)]">
+          <AccountTabs cards={group.cards} providerName={group.name} selected={group.activeId} onSelect={group.onSelect} />
+        </div>
+      ) : null}
       <div
         className={cn(
           "pt-[var(--card-gutter)]",
@@ -238,14 +261,18 @@ interface ProviderSectionHeaderProps {
   card: Card;
   handle?: SectionHandle;
   nowMs?: number;
+  /** The header's name; the card's own title when absent (a multi-account provider names itself). */
+  title?: string;
   onCustomize?: () => void;
+  onCopyImage?: () => void;
   onSwitchAccount?: () => void;
 }
 
 /**
  * ProviderSectionHeader: gray provider mark, name, plan badge, stale hint, warning triangle,
- * and on the trailing edge the per-provider shortcut OpenUsage keeps in the context menu:
- * Customize (this provider's rows). An account card also gets the
+ * and on the trailing edge the per-provider shortcuts OpenUsage keeps in the context menu:
+ * copy the card as an image (only on the header's hover or focus, like the tray's own reveal)
+ * and Customize (this provider's rows). An account card also gets the
  * switch control first: a filled star on the login in use, an outline star button on the others. The
  * header is also the drag handle, so the buttons stop the pointer-down from starting a drag.
  */
@@ -254,10 +281,13 @@ export function ProviderSectionHeader({
   card,
   handle,
   nowMs = 0,
+  title,
   onCustomize,
+  onCopyImage,
   onSwitchAccount,
 }: ProviderSectionHeaderProps) {
   const plan = displayPlan(card.title, card.plan);
+  const name = title || card.title;
   const { language } = useI18n();
   const age = card.stale && card.fetchedAt && nowMs > card.fetchedAt ? ` · ${formatAgo(nowMs - card.fetchedAt, language)}` : "";
   return (
@@ -266,9 +296,9 @@ export function ProviderSectionHeader({
       {...handle?.attributes}
       {...handle?.listeners}
     >
-      <ProviderIcon className="text-label-2" size="var(--sz-icon)" slug={card.icon} title={card.title} />
+      <ProviderIcon className="text-label-2" size="var(--sz-icon)" slug={card.icon} title={name} />
       <div className="flex min-w-0 items-baseline gap-[var(--gap-inline)]">
-        <TruncatedText className="min-w-0 text-[length:var(--sz-header)] font-semibold">{card.title}</TruncatedText>
+        <TruncatedText className="min-w-0 text-[length:var(--sz-header)] font-semibold">{name}</TruncatedText>
         {plan ? <span className="shrink-0 text-[length:var(--sz-badge)] text-label-2">{plan}</span> : null}
         {card.stale ? <span className="text-[length:var(--sz-badge)] text-label-3">{m.stale()}{age}</span> : null}
       </div>
@@ -283,9 +313,17 @@ export function ProviderSectionHeader({
       ) : null}
       <span className="min-w-[var(--gap-controls)] flex-1" />
       {account ? <DesktopPrepareControl account={account} card={card} nowMs={nowMs} /> : null}
-      {account ? <AccountControl account={account} title={card.title} onSwitch={onSwitchAccount} /> : null}
+      {account ? <AccountControl account={account} title={name} onSwitch={onSwitchAccount} /> : null}
+      {onCopyImage ? (
+        <HeaderAction
+          // Always shown, beside the customize action; the exported PNG drops it (data-exporting).
+          icon={<MdiContentCopy />}
+          label={m.copy_as_image()}
+          onClick={onCopyImage}
+        />
+      ) : null}
       {onCustomize ? (
-        <HeaderAction icon={<MdiTune />} label={`${m.customize()} ${card.title}`} onClick={onCustomize} />
+        <HeaderAction icon={<MdiTune />} label={`${m.customize()} ${name}`} onClick={onCustomize} />
       ) : null}
     </header>
   );
