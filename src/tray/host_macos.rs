@@ -18,9 +18,10 @@ use objc2_app_kit::{
     NSApplication, NSAutoresizingMaskOptions, NSBezierPath, NSButton, NSColor,
     NSCompositingOperation, NSEvent, NSEventMask, NSFont, NSFontAttributeName,
     NSFontWeightSemibold, NSForegroundColorAttributeName, NSGlassEffectView,
-    NSGlassEffectViewStyle, NSImage, NSImageScaling, NSPasteboard, NSPasteboardTypePNG, NSScreen,
-    NSStringDrawing, NSView, NSVisualEffectBlendingMode, NSVisualEffectMaterial,
-    NSVisualEffectState, NSVisualEffectView, NSWindow, NSWindowOrderingMode,
+    NSGlassEffectViewStyle, NSImage, NSImageScaling, NSPasteboard, NSPasteboardTypePNG,
+    NSPasteboardTypeString, NSScreen, NSStringDrawing, NSView, NSVisualEffectBlendingMode,
+    NSVisualEffectMaterial, NSVisualEffectState, NSVisualEffectView, NSWindow,
+    NSWindowOrderingMode,
 };
 use objc2_foundation::{
     MainThreadMarker, NSAttributedStringKey, NSData, NSDictionary, NSPoint, NSRect, NSSize,
@@ -38,11 +39,12 @@ use tao::window::{Window, WindowBuilder};
 use tray_icon::menu::{ContextMenu, Menu, MenuEvent, MenuItem};
 use tray_icon::{Icon, MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent};
 use wry::http::{Request, Response, StatusCode, header::CONTENT_TYPE};
-use wry::{WebView, WebViewBuilder, WebViewBuilderExtDarwin};
+use wry::{NewWindowResponse, WebView, WebViewBuilder, WebViewBuilderExtDarwin};
 
 use super::browse;
 use super::hotkey::{self, HotkeyBinding};
 use super::icon::{Severity, tray_icon_rgba};
+use super::ipc_origin;
 use super::marks;
 use super::menu_bar::{self, LogoSegment, MenuBarLook, StatusItemContent};
 use super::options_menu::{self, OptionsAction, OptionsLabels};
@@ -353,6 +355,8 @@ fn run_loop() -> Result<(), String> {
             } => hide_popover(&mut state),
             Event::LoopDestroyed => {
                 let _ = state.worker.send(WorkerCmd::Shutdown);
+                // A sign-in CLI would otherwise outlive the tray, polling.
+                super::device_login::stop_all();
             }
             _ => {}
         }
@@ -592,20 +596,8 @@ fn stamp_facts(state: &mut TrayState) {
     let Some(obj) = state.payload.as_object_mut() else {
         return;
     };
-    for key in [
-        "shortcut",
-        "shortcut_error",
-        "refresh_minutes",
-        "updates",
-        "update",
-        "update_checked_at",
-        "repository",
-        "version",
-        "accounts",
-        "providers",
-        "providers_error",
-    ] {
-        obj.insert(key.into(), stamped[key].clone());
+    for key in super::payload::STAMPED_FACTS {
+        obj.insert((*key).into(), stamped[*key].clone());
     }
 }
 
@@ -823,6 +815,15 @@ fn copy_png_to_clipboard(bytes: &[u8]) -> bool {
     let data = NSData::with_bytes(bytes);
     // SAFETY: AppKit exports the PNG pasteboard type name for the lifetime of the process.
     unsafe { pasteboard.setData_forType(Some(&data), NSPasteboardTypePNG) }
+}
+
+/// Puts plain text on the general pasteboard: the sign-in sheet's one-time code.
+fn copy_text_to_clipboard(text: &str) -> bool {
+    let pasteboard = NSPasteboard::generalPasteboard();
+    pasteboard.clearContents();
+    let string = NSString::from_str(text);
+    // SAFETY: AppKit exports the string pasteboard type name for the lifetime of the process.
+    unsafe { pasteboard.setString_forType(&string, NSPasteboardTypeString) }
 }
 
 fn popover_payload(state: &TrayState) -> String {
@@ -1093,6 +1094,47 @@ fn handle_ipc(state: &mut TrayState, body: &str, control_flow: &mut ControlFlow)
             let _ = state.worker.send(WorkerCmd::Refresh);
         }
         "sign-in-provider" => super::providers::sign_in(&value),
+        "set-api-key" => {
+            let proxy = state.proxy.clone();
+            let worker = state.worker.clone();
+            match super::providers::request_key_check(&state.facts, &value, move || {
+                let _ = proxy.send_event(UserEvent::Facts);
+                let _ = worker.send(WorkerCmd::Refresh);
+            }) {
+                // `Ok(None)` is an ignored request: nothing to publish.
+                Ok(_) => apply_facts(state),
+                Err(fact) => {
+                    with_facts(&state.facts, |f| f.key_check = Some(fact));
+                    apply_facts(state);
+                }
+            }
+        }
+        "start-sign-in" => {
+            let push = state.proxy.clone();
+            let worker = state.worker.clone();
+            super::device_login::start(
+                &state.facts,
+                &value,
+                move || {
+                    let _ = push.send_event(UserEvent::Facts);
+                },
+                move || {
+                    let _ = worker.send(WorkerCmd::Refresh);
+                },
+            );
+            apply_facts(state);
+        }
+        "cancel-sign-in" => {
+            if super::device_login::cancel(&state.facts, &value) {
+                apply_facts(state);
+            }
+        }
+        "open-sign-in-page" => super::device_login::open_page(&state.facts, &value),
+        "copy-sign-in-code" => {
+            if let Some(code) = super::device_login::code_to_copy(&state.facts, &value) {
+                copy_text_to_clipboard(&code);
+            }
+        }
         "add-account" => super::providers::add_account(&value),
         "open-tui" => tui_launch::open(),
         "close" => hide_popover(state),
@@ -1468,8 +1510,27 @@ fn build_webview(window: &Window, proxy: EventLoopProxy<UserEvent>) -> Result<We
         // `http://aiub.localhost/` instead).
         .with_url("aiub://localhost/index.html")
         .with_ipc_handler(move |request| {
+            // The bridge now writes to `config.toml` (`set-api-key`), so only
+            // the popover's own frame may use it. wry stamps the message with
+            // the sending frame's absolute URL (`request.uri()`); any other
+            // origin is dropped before the parse, without a reply.
+            let uri = request.uri().to_string();
+            if !ipc_origin::is_popover_origin(&uri, ipc_origin::Os::Macos) {
+                return;
+            }
             let body = request.body().clone();
             let _ = proxy.send_event(UserEvent::Ipc(body));
+        })
+        // The WebView never leaves the popover's origin: other web URLs go to
+        // the default browser (the `open-url` command's path), the rest is
+        // denied.
+        .with_navigation_handler(|url| navigation_allowed(&url))
+        .with_new_window_req_handler(|url, _features| {
+            if navigation_allowed(&url) {
+                NewWindowResponse::Allow
+            } else {
+                NewWindowResponse::Deny
+            }
         })
         .with_transparent(true)
         .with_background_color((0, 0, 0, 0))
@@ -1477,6 +1538,21 @@ fn build_webview(window: &Window, proxy: EventLoopProxy<UserEvent>) -> Result<We
         .with_data_store_identifier(STORE)
         .build(window)
         .map_err(|error| error.to_string())
+}
+
+/// What the WebView may do with a navigation or a `window.open` to `url`:
+/// the popover's own origin loads in place; another web URL is handed to
+/// `browse::open` (the `open-url` command's path) and denied in place; anything
+/// else is denied.
+fn navigation_allowed(url: &str) -> bool {
+    match ipc_origin::navigation(url, ipc_origin::Os::Macos) {
+        ipc_origin::Navigation::Allow => true,
+        ipc_origin::Navigation::OpenExternal => {
+            browse::open(url);
+            false
+        }
+        ipc_origin::Navigation::Deny => false,
+    }
 }
 
 fn protocol_response(request: Request<Vec<u8>>) -> Response<Cow<'static, [u8]>> {

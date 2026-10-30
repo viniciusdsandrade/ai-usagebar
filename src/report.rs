@@ -23,7 +23,7 @@ use serde_json::json;
 use crate::config::Config;
 use crate::context::activity::{ProcessProbe, SessionActivity, SystemProbe};
 use crate::context::{ContextScan, ContextSession, ContextUsage};
-use crate::tui::app::{TabId, TabSource, TabState, refresh_one, tabs_with_desktop};
+use crate::tui::app::{Freshness, TabId, TabSource, TabState, refresh_one, tabs_with_desktop};
 use crate::tui::context::format_tokens;
 use crate::tui::panels::{Section, sections_with_metadata_for};
 
@@ -253,6 +253,25 @@ pub async fn collect_filtered_json(
     provider: Option<&str>,
     account: Option<&str>,
 ) -> std::result::Result<String, String> {
+    collect_filtered_json_with(provider, account, Freshness::Cached).await
+}
+
+/// [`collect_filtered_json`] with the wire-only read the key check needs:
+/// every builtin fetch runs with a zero TTL, so a payload another producer
+/// left in the vendor's cache — a refresh that started under a different
+/// key — cannot answer for the key just written. The verdict rests on a
+/// reading made now, or on the fetch's error.
+pub async fn collect_filtered_json_from_wire(
+    provider: Option<&str>,
+) -> std::result::Result<String, String> {
+    collect_filtered_json_with(provider, None, Freshness::Wire).await
+}
+
+async fn collect_filtered_json_with(
+    provider: Option<&str>,
+    account: Option<&str>,
+    freshness: Freshness,
+) -> std::result::Result<String, String> {
     if provider.is_none() {
         if account.is_some() {
             return Err("account requires provider".into());
@@ -291,7 +310,7 @@ pub async fn collect_filtered_json(
         let suffix = account.map_or(String::new(), |label| format!(" account {label}"));
         return Err(format!("no enabled provider matches {provider}{suffix}"));
     }
-    let entries = collect_report_targets_for(&client, &config, &targets).await;
+    let entries = collect_report_targets_for(&client, &config, &targets, freshness).await;
     let overview = config.ui.overview_vendors.as_ref().map(|vendors| {
         vendors
             .iter()
@@ -334,7 +353,7 @@ pub async fn collect_entry_json(entry_id: &str) -> std::result::Result<String, S
     if targets.is_empty() {
         return Err(format!("no enabled provider matches {entry_id}"));
     }
-    let entries = collect_report_targets_for(&client, &config, &targets).await;
+    let entries = collect_report_targets_for(&client, &config, &targets, Freshness::Cached).await;
     Ok(render_json_entries(&entries))
 }
 
@@ -360,7 +379,7 @@ async fn collect_entries()
             crate::config::config_path_hint()
         ));
     }
-    let entries = collect_entries_for(&client, &config, &tabs).await;
+    let entries = collect_entries_for(&client, &config, &tabs, Freshness::Cached).await;
     let overview = config
         .ui
         .overview_vendors
@@ -377,6 +396,7 @@ async fn collect_entries_for(
     client: &reqwest::Client,
     config: &Config,
     tabs: &[TabId],
+    freshness: Freshness,
 ) -> Vec<Entry> {
     let accounts = if tabs
         .iter()
@@ -387,20 +407,21 @@ async fn collect_entries_for(
         Vec::new()
     };
     let targets = expand_antigravity_tabs(tabs, &accounts);
-    collect_report_targets_for(client, config, &targets).await
+    collect_report_targets_for(client, config, &targets, freshness).await
 }
 
 async fn collect_report_targets_for(
     client: &reqwest::Client,
     config: &Config,
     targets: &[ReportTarget],
+    freshness: Freshness,
 ) -> Vec<Entry> {
     // Sequential on purpose: several of these share a per-vendor cache lock,
     // and firing every account at Anthropic at once is a good way to get
     // rate-limited for no gain on a handful of entries.
     let mut entries = Vec::with_capacity(targets.len());
     for target in targets {
-        entries.push(entry_for_report_target(client, config, target).await);
+        entries.push(entry_for_report_target(client, config, target, freshness).await);
     }
     // #356: what each Claude account's live sessions are doing, ahead of the
     // #255 session list. Both are best-effort local reads: nothing to read adds
@@ -417,16 +438,19 @@ async fn entry_for_report_target(
     client: &reqwest::Client,
     config: &Config,
     target: &ReportTarget,
+    freshness: Freshness,
 ) -> Entry {
     match target {
-        ReportTarget::Tab(tab) => entry_for(client, config, tab).await,
+        ReportTarget::Tab(tab) => entry_for(client, config, tab, freshness).await,
         ReportTarget::AntigravityAccount(tab, account) => {
             entry_from_antigravity_account(tab, account, Utc::now())
         }
     }
 }
 
-pub async fn run(json: bool) -> i32 {
+/// `priorities` adds the opt-in ranking (`usage --json --priorities`); `None`
+/// prints the report unchanged.
+pub async fn run(json: bool, priorities: Option<crate::recommendation::Options>) -> i32 {
     let (entries, primary, overview) = match collect_entries().await {
         Ok(collected) => collected,
         Err(message) => {
@@ -436,18 +460,30 @@ pub async fn run(json: bool) -> i32 {
     };
 
     if json {
-        println!(
-            "{}",
-            render_json_document(&entries, primary, overview.as_deref())
-        );
+        let history_dir = priorities.and_then(|_| crate::recommendation::default_history_dir());
+        let document = usage_json(
+            &entries,
+            primary,
+            overview.as_deref(),
+            priorities,
+            history_dir,
+            Utc::now(),
+        )
+        .await;
+        println!("{document}");
     } else {
         print!("{}", render_text(&entries));
     }
     report_exit_code(&entries)
 }
 
-async fn entry_for(client: &reqwest::Client, config: &Config, tab: &TabId) -> Entry {
-    let state = refresh_one(client, config, tab).await;
+async fn entry_for(
+    client: &reqwest::Client,
+    config: &Config,
+    tab: &TabId,
+    freshness: Freshness,
+) -> Entry {
+    let state = refresh_one(client, config, tab, freshness).await;
     entry_from_state_with_config(config, tab, &state, Utc::now())
 }
 
@@ -986,6 +1022,14 @@ fn render_json_document(
     primary: Option<&str>,
     overview: Option<&[&str]>,
 ) -> String {
+    render_json_value(entries, primary, overview).to_string()
+}
+
+fn render_json_value(
+    entries: &[Entry],
+    primary: Option<&str>,
+    overview: Option<&[&str]>,
+) -> serde_json::Value {
     let mut value = json!({
         "schema_version": USAGE_SCHEMA_VERSION,
         "primary": resolve_primary(primary, entries),
@@ -994,7 +1038,31 @@ fn render_json_document(
     if let Some(order) = overview {
         value["overview_vendors"] = json!(order);
     }
-    value.to_string()
+    value
+}
+
+/// What `usage --json` prints. Without `priorities` it is exactly
+/// `render_json_document`; with them the ranking is added to the same
+/// in-memory document, recording readings in `history_dir`.
+async fn usage_json(
+    entries: &[Entry],
+    primary: Option<&str>,
+    overview: Option<&[&str]>,
+    priorities: Option<crate::recommendation::Options>,
+    history_dir: Option<std::path::PathBuf>,
+    now: DateTime<Utc>,
+) -> String {
+    match priorities {
+        None => render_json_document(entries, primary, overview),
+        Some(options) => crate::recommendation::attach_priorities(
+            render_json_value(entries, primary, overview),
+            options,
+            history_dir,
+            now,
+        )
+        .await
+        .to_string(),
+    }
 }
 
 /// The single-entry shape: the same rows, without a `primary` the caller
@@ -3369,5 +3437,141 @@ mod tests {
         // Additive fields are absent, not null, when there is nothing to say.
         assert!(value["entries"][1].get("activity").is_none());
         assert!(render_text(&entries).contains("1 working · 2 waiting"));
+    }
+
+    fn weekly_metric(percent: u16, reset_at: DateTime<Utc>) -> ReportSection {
+        let mut section = metric("Weekly (7d)", percent, &format!("{percent}%"), "");
+        if let ReportSection::Metric {
+            reset_at: at,
+            window_secs,
+            ..
+        } = &mut section
+        {
+            *at = Some(reset_at);
+            *window_secs = Some(7 * 86_400);
+        }
+        section
+    }
+
+    fn priorities_fixture() -> (Vec<Entry>, DateTime<Utc>) {
+        let now = DateTime::from_timestamp(1_800_000_000, 0).unwrap();
+        let mut claude = entry(
+            "anthropic",
+            vec![weekly_metric(20, now + chrono::Duration::days(3))],
+        );
+        claude.fetched_at = Some(now);
+        (vec![claude], now)
+    }
+
+    #[tokio::test]
+    async fn usage_json_with_priorities_adds_the_ranking_to_the_same_document() {
+        let (entries, now) = priorities_fixture();
+        let dir = tempfile::tempdir().unwrap();
+        let options = crate::recommendation::Options {
+            recent_hours: 3,
+            alert: crate::recommendation::Alert::default(),
+        };
+        let out = usage_json(
+            &entries,
+            None,
+            None,
+            Some(options),
+            Some(dir.path().to_path_buf()),
+            now,
+        )
+        .await;
+        let doc: serde_json::Value = serde_json::from_str(&out).unwrap();
+
+        // The plain report is still all there.
+        let plain: serde_json::Value =
+            serde_json::from_str(&render_json_document(&entries, None, None)).unwrap();
+        assert_eq!(doc["entries"], plain["entries"]);
+        assert_eq!(doc["schema_version"], plain["schema_version"]);
+
+        assert_eq!(doc["priority_recent_hours"], 3);
+        assert_eq!(
+            doc["priority_alert"],
+            json!({"unused_percent": 50, "hours": 24})
+        );
+        assert_eq!(doc["priority_history_available"], true);
+        let ranking = doc["ranking"].as_array().unwrap();
+        assert_eq!(ranking.len(), 1);
+        let row = &ranking[0];
+        let mut keys: Vec<&str> = row
+            .as_object()
+            .unwrap()
+            .keys()
+            .map(String::as_str)
+            .collect();
+        keys.sort_unstable();
+        assert_eq!(
+            keys,
+            [
+                "alert_hours",
+                "alert_unused_percent",
+                "cycle_percent_per_hour",
+                "entry_id",
+                "fetched_at",
+                "name",
+                "pace_percent_per_hour",
+                "reason",
+                "reason_code",
+                "recent_hours",
+                "recent_percent_per_hour",
+                "remaining_percent",
+                "required_percent_per_hour",
+                "reset_at",
+                "session_exhausted",
+                "stale",
+                "status",
+                "unused_percent",
+                "urgent",
+                "window",
+            ]
+        );
+        assert_eq!(row["entry_id"], "anthropic");
+        assert_eq!(row["window"], "Weekly (7d)");
+        assert_eq!(row["status"], "priority");
+        assert_eq!(row["remaining_percent"], 80.0);
+        // The recommendation is the first row worth using first.
+        assert_eq!(doc["recommendation"], *row);
+        assert!(dir.path().join("history.json").exists());
+    }
+
+    #[tokio::test]
+    async fn usage_json_without_priorities_is_byte_for_byte_the_plain_report() {
+        let (entries, now) = priorities_fixture();
+        let dir = tempfile::tempdir().unwrap();
+        let overview = ["anthropic"];
+        let out = usage_json(
+            &entries,
+            Some("anthropic"),
+            Some(&overview),
+            None,
+            Some(dir.path().to_path_buf()),
+            now,
+        )
+        .await;
+        assert_eq!(
+            out,
+            render_json_document(&entries, Some("anthropic"), Some(&overview))
+        );
+        let doc: serde_json::Value = serde_json::from_str(&out).unwrap();
+        for key in [
+            "ranking",
+            "recommendation",
+            "priority_recent_hours",
+            "priority_alert",
+            "priority_history_available",
+        ] {
+            assert!(
+                doc.get(key).is_none(),
+                "{key} only appears with --priorities"
+            );
+        }
+        assert!(
+            !dir.path().join("history.json").exists(),
+            "nothing is recorded without --priorities"
+        );
     }
 }

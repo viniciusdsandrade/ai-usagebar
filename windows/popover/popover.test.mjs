@@ -10,6 +10,12 @@ import {
   projectCards,
   resetLabel,
   friendlyError,
+  keyCheckError,
+  keyDialogPhase,
+  KEY_CHECK_NO_ANSWER_MS,
+  signInPhase,
+  SIGN_IN_NO_ANSWER_MS,
+  countdownText,
   explainError,
   displayPlan,
   leftLabel,
@@ -276,7 +282,7 @@ assert.equal(updateMessage({ state: 'available', installable: true }, 'pt-BR'), 
 assert.equal(updateMessage({ state: 'downloading' }, 'pt-BR'), 'Baixando a nova versão…');
 assert.equal(updateMessage({ state: 'downloading' }), 'Downloading the new version…');
 // A diagnosis that is only a path cleans to nothing: the fallback hint is translated too.
-assert.equal(explainError('/Users/someone/.config/x', 'zai', 'pt-BR').hint, 'Abra o TUI para ver detalhes.');
+assert.equal(explainError('/Users/someone/.config/x', 'zai', 'pt-BR').hint, 'Nenhum detalhe foi informado.');
 
 const bad = parseHostPayload('{');
 assert.equal(bad.hostError.includes('valid JSON'), true);
@@ -346,7 +352,7 @@ assert.equal(nextUpdateLabel({ nextRefreshAt: 0 }, 1), 'Updating…');
 
 assert.equal(
   friendlyError('Zai: no API key. Either set an API key in a valid environment variable or set `api_key` under [zai] in C:\\Users\\dj4lm\\AppData\\Roaming\\ai-usagebar\\config\\config.toml.'),
-  'No API key. Open TUI → Settings to add one.',
+  'No API key. Add one to start tracking usage.',
 );
 assert.equal(
   friendlyError('HTTP 429: Rate limited. Please try again later.'),
@@ -1592,8 +1598,19 @@ assert.equal(quotaAlternate(null, 'left'), '');
   assert.equal(cards[0].warning, null);
 
   // ASSERT: actions by error class
-  assert.deepEqual(explainError('no API key', 'zai').action, { cmd: 'open-tui', label: 'Open TUI' });
-  assert.deepEqual(explainError('no vendors enabled').action, { cmd: 'open-tui', label: 'Open TUI' });
+  // A missing key opens the key dialog for that provider, and no provider on
+  // opens Customize: both are fixed inside the popover, never in the TUI.
+  assert.deepEqual(explainError('no API key', 'zai').action, { cmd: 'add-key', id: 'zai', label: 'Add key' });
+  assert.deepEqual(explainError('no API key', 'zai@work').action, { cmd: 'add-key', id: 'zai', label: 'Add key' });
+  assert.deepEqual(explainError('no API key', { id: 'openrouter' }).action, { cmd: 'add-key', id: 'openrouter', label: 'Add key' });
+  assert.deepEqual(explainError('no API key').action, { cmd: 'customize', label: 'Customize' });
+  assert.deepEqual(explainError('no vendors enabled').action, { cmd: 'customize', label: 'Customize' });
+  assert.equal(explainError('no vendors enabled').hint, 'Turn one on in Customize.');
+  // A local read failure shows its own diagnosis and offers Refresh.
+  const ioFailure = explainError('io error: permission denied reading ~/.codex/sessions', 'openai');
+  assert.deepEqual(ioFailure.action, { cmd: 'refresh', label: 'Refresh' });
+  assert.match(ioFailure.hint, /permission denied/);
+  assert.doesNotMatch(JSON.stringify([explainError('no API key', 'zai'), explainError('no vendors enabled'), ioFailure]), /TUI/);
   assert.deepEqual(explainError('HTTP 503: down', 'zai').action, { cmd: 'refresh', label: 'Refresh' });
   assert.deepEqual(explainError('network transport error: connection refused', 'openai').action, { cmd: 'refresh', label: 'Refresh' });
   assert.equal(explainError('HTTP 401: authentication rejected', 'openai').action, undefined);
@@ -2628,4 +2645,173 @@ console.log('ok');
     assert.deepEqual(notices, [true]);
     expire();
   }
+}
+
+// --- the key dialog: key_check from the host -------------------------------------
+{
+  const ok = parseHostPayload(JSON.stringify({ key_check: { id: 'zai', seq: 7, state: 'ok', error: '' } }));
+  assert.deepEqual(ok.keyCheck, { id: 'zai', seq: 7, state: 'ok', error: '' });
+  // Absent, non-object, missing id, or an unknown state all mean "no fact",
+  // never a guessed one.
+  assert.equal(parseHostPayload('{}').keyCheck, null);
+  assert.equal(parseHostPayload(JSON.stringify({ key_check: null })).keyCheck, null);
+  assert.equal(parseHostPayload(JSON.stringify({ key_check: 'ok' })).keyCheck, null);
+  assert.equal(parseHostPayload(JSON.stringify({ key_check: { id: 'zai', seq: 7, state: 'exploded' } })).keyCheck, null);
+  assert.equal(parseHostPayload(JSON.stringify({ key_check: { seq: 7, state: 'ok' } })).keyCheck, null);
+  assert.equal(parseHostPayload(JSON.stringify({ key_check: { id: 'zai', seq: 7.5, state: 'ok' } })).keyCheck, null);
+  assert.equal(parseHostPayload(JSON.stringify({ key_check: { id: 'zai', seq: -1, state: 'ok' } })).keyCheck, null);
+  // The error is untrusted text: it is cleaned with the same limit as providers_error.
+  const dirty = parseHostPayload(JSON.stringify({ key_check: { id: 'zai', seq: 7, state: 'failed', error: 'bad\u001b[31m key' } }));
+  assert.equal(dirty.keyCheck.state, 'failed');
+  assert.equal(dirty.keyCheck.id, 'zai');
+  assert.ok(!dirty.keyCheck.error.includes('\u001b'));
+  assert.match(dirty.keyCheck.error, /bad/);
+}
+
+// --- the key dialog: keyDialogPhase -----------------------------------------------
+{
+  const now = 10_000_000;
+  const sent = (ago) => now - ago;
+  assert.equal(keyDialogPhase(null, null, 0, now), 'idle');
+  // Nothing pending means idle, even when a verdict for another send is on screen.
+  assert.equal(keyDialogPhase({ id: 'zai', seq: 1, state: 'ok', error: '' }, null, sent(1_000), now), 'idle');
+  const inFlight = { id: 'zai', seq: 5, state: 'checking', error: '' };
+  assert.equal(keyDialogPhase(inFlight, 5, sent(1_000), now), 'checking');
+  assert.equal(keyDialogPhase({ id: 'zai', seq: 5, state: 'ok', error: '' }, 5, sent(1_000), now), 'ok');
+  assert.equal(keyDialogPhase({ id: 'zai', seq: 5, state: 'failed', error: '' }, 5, sent(1_000), now), 'failed');
+  // A verdict for another send is not this dialog's: earlier or later, it
+  // counts as no answer and the spinner keeps running.
+  assert.equal(keyDialogPhase({ id: 'zai', seq: 4, state: 'ok', error: '' }, 5, sent(1_000), now), 'checking');
+  assert.equal(keyDialogPhase({ id: 'zai', seq: 6, state: 'failed', error: '' }, 5, sent(1_000), now), 'checking');
+  // No answer at the limit, inclusive; still checking one millisecond before it.
+  assert.equal(keyDialogPhase(inFlight, 5, sent(KEY_CHECK_NO_ANSWER_MS - 1), now), 'checking');
+  assert.equal(keyDialogPhase(inFlight, 5, sent(KEY_CHECK_NO_ANSWER_MS), now), 'no-answer');
+  assert.equal(keyDialogPhase(null, 5, sent(KEY_CHECK_NO_ANSWER_MS), now), 'no-answer');
+  assert.equal(KEY_CHECK_NO_ANSWER_MS, 60_000);
+}
+
+// --- the catalog rows carry the credential's label and note -----------------------
+{
+  const payload = parseHostPayload(JSON.stringify({ providers: [
+    { id: 'zai', name: 'Z.AI', enabled: true, configured: true, key_label: 'API key', key_note: 'From the Z.AI console.' },
+    { id: 'anthropic', name: 'Anthropic', enabled: true, configured: true },
+  ] }));
+  assert.equal(payload.providers[0].keyLabel, 'API key');
+  assert.equal(payload.providers[0].keyNote, 'From the Z.AI console.');
+  // A row without the pair carries the pair as empty text, not undefined.
+  assert.equal(payload.providers[1].keyLabel, '');
+  assert.equal(payload.providers[1].keyNote, '');
+}
+
+// --- the key dialog: the line for a refused key ----------------------------------
+{
+  // A rejection names the key, never the error card's "sign-in expired".
+  assert.equal(keyCheckError('HTTP 401: {"type":"error"}', 'Z.AI', 'en'), 'Z.AI rejected this key.');
+  assert.equal(keyCheckError('HTTP 403 forbidden', 'Z.AI', 'pt-BR'), 'Z.AI recusou esta chave.');
+  assert.equal(keyCheckError('authentication rejected', 'OpenRouter', 'en'), 'OpenRouter rejected this key.');
+  // Anything else reads as the card does.
+  const unreachable = keyCheckError('network transport error: connection refused', 'Z.AI', 'en');
+  assert.equal(unreachable, friendlyError('network transport error: connection refused', null, 'en'));
+  assert.doesNotMatch(unreachable, /rejected this key/);
+  assert.equal(keyCheckError('', 'Z.AI', 'en'), '');
+}
+
+// --- the provider list rows carry the credential's label and note ----------------
+{
+  const providers = parseHostPayload(JSON.stringify({
+    entries: [],
+    providers: [
+      { id: 'zai', name: 'Z.AI', kind: 'api_key', enabled: true, configured: false, env: 'ZAI_API_KEY', sign_in: 'Add an API key in Settings, then Refresh.', action: 'settings', add_accounts: [], key_label: 'API key', key_note: 'From the Z.AI console.' },
+      { id: 'openai', name: 'Codex', kind: 'oauth', enabled: true, configured: true, env: '', sign_in: 'Run `codex login` in a terminal, then Refresh.', action: 'terminal', add_accounts: [] },
+    ],
+  })).providers;
+  const { enabled } = providerListRows(providers, [], emptyLayout());
+  const zai = enabled.find((row) => row.id === 'zai');
+  assert.equal(zai.keyLabel, 'API key');
+  assert.equal(zai.keyNote, 'From the Z.AI console.');
+  const codex = enabled.find((row) => row.id === 'openai');
+  assert.equal(codex.keyLabel, '');
+  assert.equal(codex.keyNote, '');
+}
+
+// --- the sign-in sheet: sign_in from the host -------------------------------------
+{
+  const fact = { id: 'openai', seq: 7, state: 'waiting', code: 'ABCD-12345', expires_at: 1_700_000_000_000, reason: '', error: '' };
+  assert.deepEqual(parseHostPayload(JSON.stringify({ sign_in: fact })).signIn, {
+    id: 'openai', seq: 7, state: 'waiting', code: 'ABCD-12345', expiresAt: 1_700_000_000_000, reason: '', error: '',
+  });
+  // Absent, malformed, or an unknown state: no fact, never a guess.
+  assert.equal(parseHostPayload('{}').signIn, null);
+  assert.equal(parseHostPayload(JSON.stringify({ sign_in: 'waiting' })).signIn, null);
+  assert.equal(parseHostPayload(JSON.stringify({ sign_in: { ...fact, state: 'exploded' } })).signIn, null);
+  assert.equal(parseHostPayload(JSON.stringify({ sign_in: { ...fact, seq: 7.5 } })).signIn, null);
+  assert.equal(parseHostPayload(JSON.stringify({ sign_in: { ...fact, id: '' } })).signIn, null);
+  // The code is shown and typed elsewhere: anything but its shape is dropped,
+  // and so is an unknown reason; the error is cleaned like every host text.
+  const odd = parseHostPayload(JSON.stringify({ sign_in: { ...fact, code: '<img src=x>', reason: 'hacked', error: 'bad\u001b[31m', expires_at: -4 } })).signIn;
+  assert.equal(odd.code, '');
+  assert.equal(odd.reason, '');
+  assert.equal(odd.expiresAt, 0);
+  assert.ok(!odd.error.includes('\u001b'));
+  assert.equal(parseHostPayload(JSON.stringify({ sign_in: { ...fact, state: 'unavailable', reason: 'device-off' } })).signIn.reason, 'device-off');
+}
+
+// --- the sign-in sheet: signInPhase and the countdown -----------------------------
+{
+  const now = 10_000_000;
+  const sent = (ago) => now - ago;
+  const fact = (state, extra = {}) => ({ id: 'openai', seq: 5, state, code: 'ABCD-1234', expiresAt: 0, reason: '', error: '', ...extra });
+  assert.equal(signInPhase(null, null, 0, now), 'idle');
+  // Until the host answers this start, the sheet is asking for a code.
+  assert.equal(signInPhase(null, 5, sent(1_000), now), 'starting');
+  assert.equal(signInPhase(fact('ok', { seq: 4 }), 5, sent(1_000), now), 'starting');
+  assert.equal(signInPhase(null, 5, sent(SIGN_IN_NO_ANSWER_MS - 1), now), 'starting');
+  assert.equal(signInPhase(null, 5, sent(SIGN_IN_NO_ANSWER_MS), now), 'no-answer');
+  // The host's own fact answers, whatever its age.
+  for (const state of ['starting', 'waiting', 'ok', 'expired', 'unavailable', 'failed']) {
+    assert.equal(signInPhase(fact(state), 5, sent(SIGN_IN_NO_ANSWER_MS * 10), now), state);
+  }
+  // A code past its expiry on this clock reads as expired before the host gives up on it.
+  assert.equal(signInPhase(fact('waiting', { expiresAt: now + 1 }), 5, sent(1_000), now), 'waiting');
+  assert.equal(signInPhase(fact('waiting', { expiresAt: now }), 5, sent(1_000), now), 'expired');
+  assert.equal(countdownText(now + (14 * 60 + 32) * 1000 + 999, now), '14:32');
+  assert.equal(countdownText(now + 5_000, now), '0:05');
+  assert.equal(countdownText(now - 5_000, now), '0:00');
+}
+
+// --- a device-code provider's card offers the sign-in sheet -----------------------
+{
+  const device = (configured) => ({ id: 'openai', account: 'ChatGPT', configured });
+  // No login at all: "Not signed in", whatever the read failure said.
+  const missing = explainError('io error: No such file or directory at ~/.codex/auth.json', 'openai', 'en', device(false));
+  assert.equal(missing.title, 'Not signed in');
+  assert.equal(missing.hint, 'Sign in with your ChatGPT account to track usage.');
+  assert.deepEqual(missing.action, { cmd: 'sign-in', id: 'openai', label: 'Sign in' });
+  // A login the provider refused: the same fix, under "Sign-in expired".
+  const refused = explainError('HTTP 401: authentication rejected', 'openai', 'en', device(true));
+  assert.equal(refused.title, 'Sign-in expired');
+  assert.deepEqual(refused.action, { cmd: 'sign-in', id: 'openai', label: 'Sign in' });
+  assert.equal(explainError('Kimi Code CLI token refresh failed (x). Run `kimi` and log in again.', 'kimi', 'en', { id: 'kimi', account: 'Kimi', configured: true }).action.cmd, 'sign-in');
+  // Any other failure of a signed-in provider reads as before.
+  assert.deepEqual(explainError('HTTP 503: down', 'openai', 'en', device(true)).action, { cmd: 'refresh', label: 'Refresh' });
+  // Without a device flow, a refused login keeps the terminal hint and no button.
+  assert.equal(explainError('HTTP 401: authentication rejected', 'openai', 'en', null).action, undefined);
+  assert.equal(explainError('HTTP 401: authentication rejected', 'openai', 'pt-BR', device(false)).title, 'Não conectado');
+}
+
+// --- the catalog rows carry a device-code provider's sheet words ------------------
+{
+  const payload = parseHostPayload(JSON.stringify({ providers: [
+    { id: 'openai', name: 'Codex', enabled: true, configured: false, action: 'device', sign_in_account: 'ChatGPT', sign_in_issuer: 'OpenAI' },
+    { id: 'anthropic', name: 'Claude', enabled: true, configured: false, action: 'terminal' },
+  ] }));
+  assert.equal(payload.providers[0].action, 'device');
+  assert.equal(payload.providers[0].signInAccount, 'ChatGPT');
+  assert.equal(payload.providers[0].signInIssuer, 'OpenAI');
+  assert.equal(payload.providers[1].signInAccount, '');
+  const { enabled } = providerListRows(payload.providers, [], emptyLayout());
+  const codex = enabled.find((row) => row.id === 'openai');
+  assert.equal(codex.action, 'device');
+  assert.equal(codex.signInAccount, 'ChatGPT');
+  assert.equal(codex.signInIssuer, 'OpenAI');
 }

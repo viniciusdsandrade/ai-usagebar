@@ -1,5 +1,179 @@
 ## [Unreleased]
 
+## [1.46.0] — 2026-10-29
+
+### Added
+
+- **Omarchy: run a local build.** `reportBinary` (default `ai-usagebar`)
+  and `tuiBinary` (default `ai-usagebar-tui`) point the plugin at a build
+  other than the binaries on `PATH`: the first runs the report, settings
+  and the Nous login, the second opens the dashboard. They are set with
+  `omarchy bar set`; Settings has no control for them on purpose
+  (`omarchy/README.md`, Local builds).
+
+- **Usage priorities: which AI to use first.** `usage --json --priorities`
+  adds a `ranking` of every configured provider, ordered by the weekly quota
+  projected to reset unused, and the first row worth using as
+  `recommendation`. Each provider is measured on its weekly window (the most
+  used one when there are several), so a 5-hour session never drives it; the
+  cycle average spans at least a day, and the recent pace from a local history
+  (provider and metric ids, percentages and timestamps for 25 hours, in the
+  cache directory) weighs only on the next 24 hours. `--recent-hours`,
+  `--alert-unused-percent` and `--alert-hours` tune it. Without the flag the
+  report is byte-for-byte unchanged and nothing is recorded.
+
+- **Add an API key from the tray popover.** A provider that needs only an
+  API key sent you to the TUI in a terminal; its key icon in the provider
+  list now opens a dialog for the key. The tray saves it to `config.toml`
+  with the same writer the Settings overlay uses (mode 600), fetches that
+  provider alone while the dialog shows a spinner, and keeps the key only
+  when the provider accepts it. A refused key puts the previous value back
+  and the dialog says why, so you can paste another. A provider card that
+  reads "No API key" opens the same dialog instead of pointing at the TUI,
+  and "No providers enabled" opens Customize.
+
+- **Sign in to Codex, Kimi and Nous Research from the tray popover, with a
+  device code.** These three sign in by typing a one-time code on their own
+  page, so they no longer need a terminal. Their sign-in icon in the provider
+  list, and "Sign in" on a card that reads "Not signed in", open a sheet that
+  shows the code with Copy, the time it has left, and "Open page". The tray
+  runs the provider's own login: `codex login --device-auth` (with
+  `CODEX_HOME` set to the login the Codex card reads), `kimi login` (in the
+  region `config.toml` names), or this project's Nous device flow. The sheet
+  shows a check once the login is saved, and the card fetches the new login
+  right away. An expired code offers a new one. When device sign-in cannot
+  run, the sheet says why and offers the terminal:
+  - the CLI is not installed;
+  - `config.toml` points the provider at a login file of its own;
+  - device sign-in is off for the ChatGPT account.
+
+  Cancelling, or closing the sheet, stops the CLI and everything it started.
+  Quitting the tray does too. The page's address never reaches the popover:
+  the tray opens it, and only on the provider's own hosts. Claude and Copilot
+  keep their terminal sign-in.
+
+### Changed
+
+- **Omarchy: a provider error reads as a notice with its fix.** The inline
+  status box shows an icon and a translated title for the kind of problem
+  (sign-in needed, connection problem, rate limited, refresh failed, not
+  installed), then the message. When the message names a command
+  (``Run `codex login` ``), the command is shown with a Copy button; it is
+  copied with `wl-copy`, never run. Connection problems and rate limits
+  offer Try again.
+
+### Fixed
+
+- **Cursor opaque IDE sessions can fall back to `cursor-agent`.** When Cursor
+  3.27.12's `curs…` token is rejected with HTTP 401, usage retries once with an
+  independently signed-in `cursor-agent` session. Decodable IDE JWTs remain
+  authoritative, and a WAF-style 403 never switches accounts (#503).
+
+- **GitHub Copilot credential lookup no longer freezes the TUI.** The
+  `gh auth token` helper now runs asynchronously with a five-second deadline;
+  a stalled helper is killed and reaped, while a timeout is reported as a
+  transient lookup failure instead of claiming the saved login is invalid
+  (#530).
+
+- **Rejected quota caches no longer bypass an active HTTP 429 backoff.**
+  SuperGrok and Antigravity's remote fallback keep the five-minute wait after
+  a cached window ends, and Synthetic keeps it when upgrading from its old
+  quota format. SuperGrok also starts the wait when a 429 arrives with no
+  usable cached figure. Valid snapshots remain available as stale data;
+  otherwise the entry shows the rate-limit countdown instead of retrying
+  immediately (#522).
+
+- **Synthetic quota alerts describe the next partial refill.** Notifications
+  now carry the report's regeneration amount, such as `regenerates 2% in 3h`,
+  instead of calling the next refill a full window reset. Thresholds, urgency,
+  and notification deduplication are unchanged.
+
+- **Nous credential-lock waits keep the TUI responsive.** An OAuth refresh
+  waiting for another process no longer blocks the async runtime, so input,
+  timers, and other requests can progress. The lock still protects the whole
+  token rotation and credential write.
+
+- **Credit-expiry notifications identify named accounts.** Reminders for a
+  banked reset credit now include the account label, like quota alerts do,
+  so users with several accounts can tell where to redeem it.
+
+- **GNOME extension and KDE plasmoid render live countdowns for regenerating quotas.**
+  Refilling metric rows (Synthetic's weekly credit budget) report a regeneration
+  amount and static detail starting with "Regenerates <amount> in ...". Both the
+  GNOME menu and the KDE plasmoid now strip that prefix from the metric detail,
+  matching the Omarchy panel, and format their live countdowns with the
+  regeneration amount instead of repeating the static string next to "Resets in ...".
+
+- **SuperGrok tooltip product rows use the Grok mark.** Product slice breakdown
+  rows in the Waybar tooltip displayed the Claude icon glyph (`󰚩`) instead of
+  the provider's mark (`󰇷`).
+
+- **Cross-provider `{icon}` uses each provider's own mark.** Kimi, MiniMax,
+  Moonshot, and Z.AI no longer inherit Claude's glyph; providers without a
+  distinct Nerd Font mark use their documented short name (#523).
+
+- **Omarchy: no untranslated "Error" pill.** A provider in error showed a grey
+  `Error` pill in every language beside refresh and settings. A red badge
+  with the problem's icon and a one-word translated label replaces it, and
+  the subtitle under the provider name names the problem instead of a
+  generic "provider unavailable".
+- **Omarchy: notices drop internal prefixes.** `credentials error:`,
+  `auth error:`, `HTTP error:` and `network error:` no longer lead the
+  message the panel shows.
+- **Omarchy: window names follow the interface language.** Generic windows
+  (`Session (5h)`, `Weekly (7d)`, `Weekly`, `Monthly`) stayed in English in
+  the usage rows; they now use the catalog's names in all five locales.
+
+- **A Kimi Code CLI login counts as signed in, in the provider list.** The
+  list looked for the CLI's login under `~/credentials/` instead of
+  `~/.kimi-code/credentials/`. So a provider whose card read the login fine
+  still showed the sign-in alert.
+
+- **Saving `config.toml` from the tray, the TUI, and the CLI waits for the
+  other instead of overwriting it.** Their saves are read-modify-writes of
+  the same file, and a save that landed between another process's read and
+  write used to be silently lost — including the TUI's key, which the tray's
+  key check could replace with the candidate it was checking. Every save
+  now takes an exclusive `config.toml.lock` beside the config for the whole
+  read-modify-write, and the key check's snapshot, "no key yet" condition,
+  and conditional write happen under that same lock. A save that cannot get
+  the lock within five seconds fails with "config.toml is being saved by
+  another process; try again." instead of writing.
+
+### Security
+
+- **Patched constant-time cryptographic helpers.** The locked `ctutils`
+  dependency is updated to 0.4.4, resolving RUSTSEC-2026-0385 in the hashing
+  and authenticated-encryption dependency chain.
+
+- **A provider's answer that quotes the API key is no longer written to the
+  cache or shown in the report, the widget, or the CLI.** A provider that
+  echoes the key a fetch was sent with in its answer (Z.AI puts the reason in
+  `msg` inside an HTTP 200 with `success: false`) used to leave the key in
+  the vendor cache's `.last_error` and in the error the report shows; the
+  widget and the CLI built their caches without that protection at all, and
+  a successful answer that quoted the key was written to the payload as it
+  arrived. The key is now removed before the first point of writing on every
+  path: the failure diagnostic is redacted as the cache records it, the
+  error that reaches the report, the bar, or the terminal is redacted with
+  the same key, and a successful answer is redacted on its decoded JSON
+  strings before it is persisted (an escaped echo counts; numbers and
+  structure are left alone), while an answer that is not JSON and quotes the
+  key is not persisted at all. The key check's final scrub stays as a second
+  layer.
+
+- **The tray's IPC bridge only answers the popover's own page, and the
+  WebView no longer navigates outside it.** The tray hosts accepted any
+  message on the `window.ipc` bridge regardless of who sent it and let the
+  WebView navigate anywhere. Now that the bridge writes keys to
+  `config.toml` (`set-api-key`), a message is only served when it comes from
+  the popover's own origin — `aiub://localhost` on macOS, `http://aiub.localhost`
+  on Windows — and any other origin is dropped before it is parsed, without
+  a reply. The WebView stays pinned to that origin too: navigation to a
+  `http`/`https` URL outside it is handed to the default browser (the same
+  path as the `open-url` command) and denied in place, and anything else —
+  `file://`, `javascript:`, a new window from `window.open` — is refused.
+
 ## [1.45.0] — 2026-10-27
 
 ### Added
@@ -4998,7 +5172,8 @@ vendors. Highlights:
 - Live API smoke test suite (`make smoke`) that exercises the real
   undocumented endpoints to detect schema drift before users do.
 
-[Unreleased]: https://github.com/akitaonrails/ai-usagebar/compare/v1.45.0...HEAD
+[Unreleased]: https://github.com/akitaonrails/ai-usagebar/compare/v1.46.0...HEAD
+[1.46.0]: https://github.com/akitaonrails/ai-usagebar/compare/v1.45.0...v1.46.0
 [1.45.0]: https://github.com/akitaonrails/ai-usagebar/compare/v1.44.0...v1.45.0
 [1.44.0]: https://github.com/akitaonrails/ai-usagebar/compare/v1.43.0...v1.44.0
 [1.43.0]: https://github.com/akitaonrails/ai-usagebar/compare/v1.42.0...v1.43.0

@@ -453,6 +453,175 @@ try {
   assert.match(readyRow, />2 metrics</);
   assert.match(readyRow, /<button[^>]*aria-label="Add account"/);
   assert.doesNotMatch(readyRow, /text-notice/);
+  // The key dialog. Radix keeps portaled content out of static markup (as it
+  // does the menus), so the contract is tested on `ApiKeyDialogView`, the
+  // content the dialog renders, under a `Dialog` root whose context
+  // `DialogTitle` and `DialogDescription` read; the wrapper is checked closed.
+  const { ApiKeyDialog, ApiKeyDialogView } = await server.ssrLoadModule('/src/components/ApiKeyDialog.tsx');
+  const { Dialog } = await server.ssrLoadModule('/src/components/ui/dialog.tsx');
+  const keyProvider = { icon: 'zai', id: 'zai', name: 'Z.AI', keyLabel: 'API key', keyNote: 'coding-plan usage' };
+  const keyView = (props) => renderToStaticMarkup(React.createElement(LanguageProvider, { language: 'en' },
+    React.createElement(Dialog, { open: true, onOpenChange() {} },
+      React.createElement(ApiKeyDialogView, {
+        checking: false, error: '', keyDraft: '', language: 'en', noAnswer: false,
+        provider: keyProvider, revealed: false,
+        onKeyChange() {}, onRevealToggle() {}, onCancel() {}, onSave() {},
+        ...props,
+      }))));
+  const enabledButtons = (markup) => (markup.match(/<button[^>]*>/g) ?? []).filter((b) => !/\sdisabled=""/.test(b));
+  // The approved layout: the provider's mark beside "<provider> key" and the
+  // host's note (first letter raised); the field is masked, with the reveal
+  // toggle inside its ring.
+  const keyIdle = keyView({});
+  assert.match(keyIdle, /class="key-dialog-mark"/);
+  assert.match(keyIdle, />Z\.AI key</);
+  assert.match(keyIdle, />Coding-plan usage</);
+  assert.match(keyIdle, /<div class="key-field"><input[^>]*>.*?aria-label="Show key"/s);
+  assert.match(keyIdle, /Saved in config\.toml, readable only by you\./);
+  assert.match(keyIdle, /<input[^>]*type="password"/);
+  assert.doesNotMatch(keyIdle, /<input[^>]*\sdisabled=""/);
+  // A form: Enter in the field submits, the same as Save.
+  assert.match(keyIdle, /<form[^>]*>/);
+  assert.match(keyIdle, /<button type="submit"[^>]*disabled=""/);
+  // With a draft, Save is live.
+  assert.doesNotMatch(keyView({ keyDraft: 'x' }), /<button type="submit"[^>]*disabled=""/);
+  // Checking: the spinner and the line, the field and Save wait; only Cancel stays live.
+  const keyChecking = keyView({ checking: true, keyDraft: 'x' });
+  assert.match(keyChecking, /animate-spin/);
+  assert.match(keyChecking, /Checking the key with Z\.AI/);
+  assert.match(keyChecking, /<input[^>]*\sdisabled=""/);
+  assert.equal(enabledButtons(keyChecking).length, 1);
+  assert.match(keyChecking, /<button type="button"[^>]*>Cancel<\/button>/);
+  // The field stands in for the key with dots, and Save says it is checking.
+  assert.match(keyChecking, /<input[^>]*placeholder="\u2022+"/);
+  assert.match(keyChecking, /<button type="submit"[^>]*disabled=""[^>]*>.*animate-spin.*Checking…<\/button>/s);
+  // Failed: a rejection names the key, the field is empty and live again.
+  const keyFailed = keyView({ error: 'HTTP 401: invalid key' });
+  assert.match(keyFailed, /text-meter-red[^>]*>Z\.AI rejected this key\.</);
+  assert.doesNotMatch(keyFailed, /Sign-in expired/);
+  // The refusal rings the field red and reads right under it.
+  assert.match(keyFailed, /<div class="key-field" data-invalid="">/);
+  assert.ok(keyFailed.indexOf('key-field') < keyFailed.indexOf('rejected this key'));
+  assert.doesNotMatch(keyFailed, /<input[^>]*\sdisabled=""/);
+  // No answer: the fixed line, the field live.
+  const keyNoAnswer = keyView({ noAnswer: true });
+  assert.match(keyNoAnswer, /No answer from Z\.AI yet/);
+  assert.doesNotMatch(keyNoAnswer, /<input[^>]*\sdisabled=""/);
+  // Closed renders nothing.
+  assert.equal(renderToStaticMarkup(React.createElement(LanguageProvider, { language: 'en' },
+    React.createElement(ApiKeyDialog, { provider: null, keyCheck: null, nowMs: 1, onClose() {} }))), '');
+  // A card that has no key offers "Add key", which opens the key dialog inside
+  // the popover (the button carries the provider for focus to come back to);
+  // nothing in it points at the TUI.
+  const { ErrorRow } = await server.ssrLoadModule('/src/components/ProviderSection.tsx');
+  const { explainError } = await server.ssrLoadModule('/src/model.js');
+  const noKeyRow = renderToStaticMarkup(React.createElement(LanguageProvider, { language: 'en' },
+    React.createElement(ErrorRow, { explained: explainError('no API key', 'zai', 'en') })));
+  assert.match(noKeyRow, /<button[^>]*data-key-row="zai"[^>]*>Add key<\/button>/);
+  assert.doesNotMatch(noKeyRow, /TUI/);
+  // In the list, a key-only provider's alert says to use the key button
+  // instead of the host's "in Settings" hint.
+  const keyOnlyList = renderToStaticMarkup(React.createElement(TooltipProvider, {},
+    React.createElement(LanguageProvider, { language: 'en' },
+      React.createElement(ProviderList, {
+        cards: [], error: '', layout: emptyLayout(),
+        providers: [{ id: 'zai', name: 'Z.AI', enabled: true, configured: false, env: '', signIn: 'Add an API key in Settings, then Refresh.', action: 'settings', addAccounts: [], keyLabel: 'API key', keyNote: '' }],
+        onOpen() {}, onReorder() {}, onToggle() {},
+      }))));
+  assert.match(keyOnlyList, /aria-label="Needs an API key: add it with the key button\."/);
+  assert.doesNotMatch(keyOnlyList, /in Settings, then Refresh/);
+  // The sign-in sheet, as the approved design lays it out per phase. Tested on
+  // `SignInDialogView` for the same reason as the key dialog.
+  const { SignInDialog, SignInDialogView } = await server.ssrLoadModule('/src/components/SignInDialog.tsx');
+  const signInProvider = { account: 'ChatGPT', icon: 'openai', id: 'openai', issuer: 'OpenAI', name: 'Codex' };
+  const signInView = (props) => renderToStaticMarkup(React.createElement(LanguageProvider, { language: 'en' },
+    React.createElement(Dialog, { open: true, onOpenChange() {} },
+      React.createElement(SignInDialogView, {
+        code: '', copied: false, error: '', expiresAt: 0, language: 'en', nowMs: 1_000_000, phase: 'starting',
+        provider: signInProvider, reason: '',
+        onCancel() {}, onCopy() {}, onOpenPage() {}, onRetry() {}, onTerminal() {},
+        ...props,
+      }))));
+  const buttonsOf = (markup) => (markup.match(/<button[^>]*>.*?<\/button>/gs) ?? []);
+  // Before the code: the mark, the title, the spinner asking the issuer; only Cancel.
+  const starting = signInView({});
+  assert.match(starting, /class="key-dialog-mark"/);
+  assert.match(starting, />Sign in to Codex</);
+  assert.match(starting, /animate-spin.*Asking OpenAI for a sign-in code…/s);
+  assert.doesNotMatch(starting, /With your ChatGPT account/);
+  assert.equal(buttonsOf(starting).length, 1);
+  assert.match(starting, />Cancel<\/button>/);
+  // The code is ready: the account under the title, the code in its box with
+  // Copy, the wait with the time left, then Cancel and the primary Open page.
+  const waiting = signInView({ phase: 'waiting', code: 'WXYZ-1234', expiresAt: 1_000_000 + (14 * 60 + 32) * 1000 });
+  assert.match(waiting, />With your ChatGPT account</);
+  assert.match(waiting, />Open the page and enter this code:</);
+  assert.match(waiting, /<div class="sign-in-code"><span class="sign-in-code-text select-all">WXYZ-1234<\/span><button[^>]*>.*?Copy<\/button><\/div>/s);
+  assert.match(waiting, /Waiting for you to approve it in the browser…/);
+  assert.match(waiting, /aria-label="Expires in 14:32"[^>]*>14:32</);
+  assert.match(waiting, /<button[^>]*data-variant="primary"[^>]*>Open page<svg/);
+  assert.ok(waiting.indexOf('>Cancel<') < waiting.indexOf('>Open page<'));
+  // The page address is never in the markup: the host opens it by seq.
+  assert.doesNotMatch(waiting, /https?:\/\/(?!www\.w3\.org\/)/);
+  assert.match(signInView({ phase: 'waiting', code: 'WXYZ-1234', copied: true }), />Copied<\/button>/);
+  // Without a code there is nothing to copy.
+  assert.match(signInView({ phase: 'waiting', code: '' }), /<button[^>]*disabled=""[^>]*>.*?Copy<\/button>/s);
+  assert.doesNotMatch(waiting, /<button[^>]*disabled=""[^>]*>.*?Copy<\/button>/s);
+  // Approved: the check, the title and the fetching line, no buttons.
+  const done = signInView({ phase: 'ok' });
+  assert.match(done, /class="sign-in-done"/);
+  assert.match(done, />Signed in to Codex</);
+  assert.match(done, />Fetching your usage…</);
+  assert.equal(buttonsOf(done).length, 0);
+  // Expired: the code dimmed, the reason in red, a new code as the next step.
+  const expired = signInView({ phase: 'expired', code: 'WXYZ-1234' });
+  assert.match(expired, /<div class="sign-in-code" data-dimmed="">/);
+  assert.match(expired, /text-meter-red[^>]*>The code expired before it was approved\.</);
+  assert.match(expired, /<button[^>]*data-variant="primary"[^>]*>Get a new code<\/button>/);
+  // Device sign-in off: the account's setting is named, and the terminal is the way left.
+  const deviceOff = signInView({ phase: 'unavailable', reason: 'device-off' });
+  assert.match(deviceOff, /Device sign-in is off for this account\. Turn it on in ChatGPT(?:'|&#x27;)s security settings/);
+  assert.match(deviceOff, /<button[^>]*>.*?Use the terminal<\/button>/s);
+  assert.doesNotMatch(deviceOff, /data-variant="primary"/);
+  assert.match(signInView({ phase: 'unavailable', reason: 'cli-missing' }), /Codex(?:'|&#x27;)s command-line tool isn(?:'|&#x27;)t installed here/);
+  assert.match(signInView({ phase: 'unavailable', reason: 'custom-path' }), /config\.toml points Codex at a login file of its own/);
+  // Failed: the sheet's sentence, the flow's own words under it, Try again.
+  const failed = signInView({ phase: 'failed', error: 'Error logging in with device code: boom' });
+  assert.match(failed, /text-meter-red[^>]*>Couldn(?:'|&#x27;)t sign in\.</);
+  assert.match(failed, /text-label-2[^>]*>Error logging in with device code: boom</);
+  assert.match(failed, /<button[^>]*data-variant="primary"[^>]*>Try again<\/button>/);
+  assert.match(signInView({ phase: 'failed', reason: 'denied', error: 'x' }), />The sign-in was turned down in the browser\.</);
+  assert.match(signInView({ phase: 'no-answer' }), /The tray hasn(?:'|&#x27;)t answered\./);
+  // Closed renders nothing.
+  assert.equal(renderToStaticMarkup(React.createElement(LanguageProvider, { language: 'en' },
+    React.createElement(SignInDialog, { provider: null, fact: null, nowMs: 1, onClose() {} }))), '');
+  // A device-code provider's card offers "Sign in", carrying the provider for focus.
+  const signInRow = renderToStaticMarkup(React.createElement(LanguageProvider, { language: 'en' },
+    React.createElement(ErrorRow, { explained: explainError('io error: not found', 'openai', 'en', { id: 'openai', account: 'ChatGPT', configured: false }) })));
+  assert.match(signInRow, />Not signed in</);
+  assert.match(signInRow, />Sign in with your ChatGPT account to track usage\.</);
+  assert.match(signInRow, /<button[^>]*data-key-row="openai"[^>]*>Sign in<\/button>/);
+  // In the list, a device-code provider's row wears the sign-in icon and says
+  // whose account it needs; a terminal provider keeps its terminal icon.
+  const deviceList = renderToStaticMarkup(React.createElement(TooltipProvider, {},
+    React.createElement(LanguageProvider, { language: 'en' },
+      React.createElement(ProviderList, {
+        cards: [], error: '', layout: emptyLayout(),
+        providers: [
+          { id: 'openai', name: 'Codex', enabled: true, configured: false, env: '', signIn: 'Run `codex login` in a terminal, then Refresh.', action: 'device', addAccounts: [], signInAccount: 'ChatGPT', signInIssuer: 'OpenAI' },
+          { id: 'anthropic', name: 'Claude', enabled: true, configured: false, env: '', signIn: 'Run `claude` in a terminal, then Refresh.', action: 'terminal', addAccounts: [] },
+        ],
+        onOpen() {}, onReorder() {}, onToggle() {},
+      }))));
+  const listRow = (id) => {
+    const start = deviceList.indexOf(`data-provider-id="${id}"`);
+    const next = deviceList.indexOf('data-provider-id=', start + 1);
+    return deviceList.slice(start, next === -1 ? undefined : next);
+  };
+  assert.match(listRow('openai'), /aria-label="Sign in with your ChatGPT account to track usage\."/);
+  assert.match(listRow('openai'), /<button[^>]*aria-label="Sign in"[^>]*data-key-row="openai"/);
+  assert.doesNotMatch(listRow('openai'), /codex login/);
+  assert.match(listRow('anthropic'), /aria-label="Run `claude` in a terminal, then Refresh\."/);
   console.log('native dashboard: ok');
 } finally {
   await server.close();

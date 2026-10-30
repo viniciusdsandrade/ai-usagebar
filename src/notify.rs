@@ -21,8 +21,8 @@
 //! a double one, and nothing in this module may change a caller's return
 //! value or exit code.
 //!
-//! No burn-rate extrapolation anywhere: reset times in bodies are only the
-//! vendor-reported absolute instants.
+//! No burn-rate extrapolation anywhere: reset or refill times in bodies are
+//! only the vendor-reported absolute instants.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -109,9 +109,12 @@ pub struct MetricRow {
     /// is the window half of the dedupe key.
     pub window: String,
     pub percent: u16,
-    /// Vendor-reported absolute reset instant. `None` when the vendor does
-    /// not state one — then the body carries no ETA, by rule.
+    /// Vendor-reported absolute reset or refill instant. `None` when the
+    /// vendor does not state one — then the body carries no ETA, by rule.
     pub reset_at: Option<DateTime<Utc>>,
+    /// Amount restored at the reported instant for a partially refilling
+    /// window, rather than a full reset (for example, `"2%"`).
+    pub regen: Option<String>,
 }
 
 /// One banked reset credit with a known expiry (Codex/SuperGrok
@@ -276,9 +279,14 @@ fn threshold_notification(
     let title = sanitize_untrusted_line(&format!("{} — {} at {}%", who, row.window, row.percent));
     let mut body = format!("{}% of the {} used", row.percent, row.window);
     if let Some(reset_at) = row.reset_at {
+        let remaining = countdown::format(Some(reset_at), now);
+        let action = match &row.regen {
+            Some(amount) if remaining == "now" => format!("regenerates {amount}"),
+            Some(amount) => format!("regenerates {amount} in"),
+            None => "resets".into(),
+        };
         body.push_str(&format!(
-            " · resets {} ({})",
-            countdown::format(Some(reset_at), now),
+            " · {action} {remaining} ({})",
             format::local_time_hm(reset_at)
         ));
     }
@@ -300,9 +308,13 @@ fn credit_notification(
     now: DateTime<Utc>,
 ) -> Notification {
     let label = credit.title.as_deref().unwrap_or("Reset credit");
+    let who = match &input.account {
+        Some(account) => format!("{} · {}", input.vendor, account),
+        None => input.vendor.clone(),
+    };
     let title = sanitize_untrusted_line(&format!(
         "{} — reset credit expires {}",
-        input.vendor,
+        who,
         format::local_date_hm(credit.expires_at)
     ));
     let body = sanitize_untrusted_line(&format!(
@@ -678,6 +690,7 @@ fn metric_rows(
                     window,
                     percent: pct,
                     reset_at: projected.reset_at,
+                    regen: projected.regen,
                 });
             }
             Section::Spacer => {}
@@ -702,6 +715,7 @@ mod tests {
             window: window.to_string(),
             percent,
             reset_at,
+            regen: None,
         }
     }
 
@@ -964,7 +978,9 @@ mod tests {
         assert_eq!(fired.len(), 1);
         assert_eq!(fired[0].urgency, Urgency::Normal);
         assert!(
-            fired[0].title.starts_with("Claude — reset credit expires "),
+            fired[0]
+                .title
+                .starts_with("Claude · gmail — reset credit expires "),
             "{}",
             fired[0].title
         );
@@ -1012,6 +1028,68 @@ mod tests {
             ..input(Vec::new())
         };
         assert_eq!(decide(&later, 97, &mut state, now).len(), 1);
+    }
+
+    #[test]
+    fn credit_expiry_alerts_identify_each_named_account() {
+        use crate::tui::app::{ReadyTab, TabId, TabState};
+        use crate::usage::{
+            OpenAiSnapshot, OpenAiSource, ResetCredit, ResetCredits, VendorSnapshot,
+        };
+
+        let now = at(23, 12, 0);
+        let expiry = now + chrono::Duration::hours(3);
+        let ready = TabState::Ready(Box::new(ReadyTab {
+            snapshot: VendorSnapshot::Openai(OpenAiSnapshot {
+                plan: "ChatGPT Pro".into(),
+                session: None,
+                weekly: None,
+                code_review: None,
+                additional_limits: Vec::new(),
+                unavailable_models: Vec::new(),
+                credits: None,
+                reset_credits: Some(ResetCredits {
+                    available: 1,
+                    credits: vec![ResetCredit {
+                        title: Some("Full reset".into()),
+                        expires_at: Some(expiry),
+                    }],
+                }),
+                source: OpenAiSource::CodexOauth,
+            }),
+            stale: false,
+            last_error: None,
+            fetched_at: Some(now),
+            display: Default::default(),
+        }));
+        let mut state = NotifyState::default();
+        for account in [Some("personal"), Some("work"), None] {
+            let tab = account.map_or_else(
+                || TabId::vendor(crate::vendor::VendorId::Openai),
+                |label| TabId::account_for(crate::vendor::VendorId::Openai, label),
+            );
+            let input = RefreshInput::from_tab(&tab, &ready, now).unwrap();
+            let fired = decide(&input, 97, &mut state, now);
+            assert_eq!(fired.len(), 1);
+            let who = account.map_or(input.vendor.clone(), |label| {
+                format!("{} · {label}", input.vendor)
+            });
+            assert_eq!(
+                fired[0].title,
+                format!(
+                    "{who} — reset credit expires {}",
+                    format::local_date_hm(expiry)
+                )
+            );
+            assert!(fired[0].body.starts_with("Full reset — redeem within 3h"));
+            assert_eq!(fired[0].urgency, Urgency::Normal);
+            assert!(
+                fired[0]
+                    .key
+                    .starts_with(&format!("{}::credit::", input.entry_id))
+            );
+            assert!(decide(&input, 97, &mut state, now).is_empty());
+        }
     }
 
     // — State persistence ———————————————————————————
@@ -1418,6 +1496,85 @@ mod tests {
                 title: Some("Full reset".into()),
                 expires_at: at(25, 0, 0),
             }]
+        );
+    }
+
+    #[test]
+    fn synthetic_notifications_describe_the_partial_refill() {
+        use crate::tui::app::{ReadyTab, TabId, TabState};
+        use crate::usage::{SyntheticSnapshot, UsageWindow, VendorSnapshot, WeeklyCredits};
+
+        let now = at(23, 12, 0);
+        let reset = at(23, 15, 0);
+        let tab = TabId::vendor(crate::vendor::VendorId::Synthetic);
+        for (credits, next_regen_percent, amount) in [
+            (None, Some(2.0), "2%"),
+            (
+                Some(WeeklyCredits {
+                    used: 30.0,
+                    max: 30.0,
+                    next_regen: 0.6,
+                }),
+                None,
+                "0.60 credits",
+            ),
+        ] {
+            for percent in [97, 100] {
+                let state = TabState::Ready(Box::new(ReadyTab {
+                    snapshot: VendorSnapshot::Synthetic(SyntheticSnapshot {
+                        plan: None,
+                        weekly: UsageWindow {
+                            utilization_pct: percent,
+                            resets_at: Some(reset),
+                            window_duration: chrono::Duration::zero(),
+                        },
+                        credits: credits.clone(),
+                        next_regen_percent,
+                        utilization_precise: f64::from(percent),
+                    }),
+                    stale: false,
+                    last_error: None,
+                    fetched_at: Some(now),
+                    display: Default::default(),
+                }));
+                let input = RefreshInput::from_tab(&tab, &state, now).unwrap();
+                let mut notify_state = NotifyState::default();
+                let fired = decide(&input, 97, &mut notify_state, now);
+
+                assert_eq!(fired.len(), 1);
+                assert_eq!(fired[0].key, "synthetic::Weekly credits");
+                assert_eq!(
+                    fired[0].body,
+                    format!(
+                        "{percent}% of the Weekly credits used · regenerates {amount} in 3h 00m ({})",
+                        format::local_time_hm(reset)
+                    )
+                );
+                assert_eq!(
+                    fired[0].urgency,
+                    if percent == 100 {
+                        Urgency::Critical
+                    } else {
+                        Urgency::Normal
+                    }
+                );
+                assert!(decide(&input, 97, &mut notify_state, now).is_empty());
+            }
+        }
+    }
+
+    #[test]
+    fn a_refill_due_now_has_no_future_countdown() {
+        let now = at(23, 12, 0);
+        let mut refill = row("Weekly credits", 100, Some(now));
+        refill.regen = Some("2%".into());
+        let fired = decide(&input(vec![refill]), 97, &mut NotifyState::default(), now);
+        assert_eq!(
+            fired[0].body,
+            format!(
+                "100% of the Weekly credits used · regenerates 2% now ({})",
+                format::local_time_hm(now)
+            )
         );
     }
 

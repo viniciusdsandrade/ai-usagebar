@@ -18,6 +18,7 @@
 /** @typedef {{}} Add_Claude_Code_AccountInputs */
 /** @typedef {{}} Add_Claude_Desktop_AccountInputs */
 /** @typedef {{}} Add_Codex_AccountInputs */
+/** @typedef {{}} Add_One_To_Track_UsageInputs */
 /** @typedef {{}} Alert_ThresholdInputs */
 /** @typedef {{}} Alert_Threshold_HintInputs */
 /** @typedef {{}} AlertsInputs */
@@ -29,6 +30,13 @@
 /** @typedef {{}} Always_VisibleInputs */
 /** @typedef {{}} Antigravity_Not_RunningInputs */
 /** @typedef {{}} Antigravity_Start_HintInputs */
+/** @typedef {{ provider: NonNullable<unknown> }} Api_Key_CheckingInputs */
+/** @typedef {{}} Api_Key_Checking_ShortInputs */
+/** @typedef {{ provider: NonNullable<unknown> }} Api_Key_Dialog_TitleInputs */
+/** @typedef {{ provider: NonNullable<unknown> }} Api_Key_No_AnswerInputs */
+/** @typedef {{ provider: NonNullable<unknown> }} Api_Key_RejectedInputs */
+/** @typedef {{}} Api_Key_SaveInputs */
+/** @typedef {{}} Api_Key_Stored_NoteInputs */
 /** @typedef {{}} Api_KeysInputs */
 /** @typedef {{}} AppearanceInputs */
 /** @typedef {{}} AutoInputs */
@@ -99,6 +107,7 @@
 /** @typedef {{}} Global_ShortcutInputs */
 /** @typedef {{}} Global_Shortcut_HintInputs */
 /** @typedef {{}} Goal_NowInputs */
+/** @typedef {{}} Hide_KeyInputs */
 /** @typedef {{}} Hide_RowInputs */
 /** @typedef {{}} HighestInputs */
 /** @typedef {{ hours: NonNullable<unknown> }} Hours_AgoInputs */
@@ -135,6 +144,7 @@
 /** @typedef {{}} Monthly_LowercaseInputs */
 /** @typedef {{}} MoreInputs */
 /** @typedef {{}} NativeInputs */
+/** @typedef {{}} Needs_Api_Key_HintInputs */
 /** @typedef {{}} New_UpdateInputs */
 /** @typedef {{}} New_Version_ReadyInputs */
 /** @typedef {{}} New_Version_UninstallableInputs */
@@ -142,6 +152,7 @@
 /** @typedef {{ duration: NonNullable<unknown> }} Next_Update_InInputs */
 /** @typedef {{}} No_AnswerInputs */
 /** @typedef {{}} No_Api_KeyInputs */
+/** @typedef {{}} No_Details_GivenInputs */
 /** @typedef {{}} No_Providers_DetectedInputs */
 /** @typedef {{}} No_Providers_EnabledInputs */
 /** @typedef {{}} No_Providers_Enabled_HintInputs */
@@ -149,6 +160,7 @@
 /** @typedef {{}} No_Usage_Or_Balance_Data_YetInputs */
 /** @typedef {{}} NoneInputs */
 /** @typedef {{}} Not_Checked_YetInputs */
+/** @typedef {{}} Not_Signed_InInputs */
 /** @typedef {{}} NotificationsInputs */
 /** @typedef {{}} Notify_MeInputs */
 /** @typedef {{}} NowInputs */
@@ -160,10 +172,7 @@
 /** @typedef {{}} Open_CustomizeInputs */
 /** @typedef {{ owner: NonNullable<unknown> }} Open_Source_ByInputs */
 /** @typedef {{}} Open_TuiInputs */
-/** @typedef {{}} Open_Tui_For_DetailsInputs */
-/** @typedef {{}} Open_Tui_Settings_To_Add_OneInputs */
 /** @typedef {{}} Open_Tui_Settings_To_Sign_InInputs */
-/** @typedef {{}} Open_Tui_Settings_To_Turn_One_OnInputs */
 /** @typedef {{}} OptionsInputs */
 /** @typedef {{ percent: NonNullable<unknown> }} Pace_By_ResetInputs */
 /** @typedef {{ duration: NonNullable<unknown> }} Pace_Shows_After_FirstInputs */
@@ -218,12 +227,35 @@
 /** @typedef {{}} Shortcut_Recording_HintInputs */
 /** @typedef {{}} ShowInputs */
 /** @typedef {{}} Show_Expiry_DatesInputs */
+/** @typedef {{}} Show_KeyInputs */
 /** @typedef {{}} Show_LessInputs */
 /** @typedef {{}} Show_MoreInputs */
 /** @typedef {{}} Show_On_DemandInputs */
 /** @typedef {{}} Show_Usage_AsInputs */
 /** @typedef {{}} Show_Usage_As_HintInputs */
+/** @typedef {{ issuer: NonNullable<unknown> }} Sign_In_AskingInputs */
+/** @typedef {{ provider: NonNullable<unknown> }} Sign_In_Cli_MissingInputs */
+/** @typedef {{}} Sign_In_Code_ExpiredInputs */
+/** @typedef {{}} Sign_In_CopiedInputs */
+/** @typedef {{}} Sign_In_CopyInputs */
+/** @typedef {{ provider: NonNullable<unknown> }} Sign_In_Custom_PathInputs */
+/** @typedef {{}} Sign_In_DeniedInputs */
+/** @typedef {{ account: NonNullable<unknown> }} Sign_In_Device_OffInputs */
+/** @typedef {{ provider: NonNullable<unknown> }} Sign_In_Dialog_TitleInputs */
+/** @typedef {{ provider: NonNullable<unknown> }} Sign_In_DoneInputs */
+/** @typedef {{}} Sign_In_Enter_CodeInputs */
 /** @typedef {{}} Sign_In_ExpiredInputs */
+/** @typedef {{ time: NonNullable<unknown> }} Sign_In_Expires_InInputs */
+/** @typedef {{}} Sign_In_FailedInputs */
+/** @typedef {{}} Sign_In_FetchingInputs */
+/** @typedef {{}} Sign_In_New_CodeInputs */
+/** @typedef {{}} Sign_In_No_AnswerInputs */
+/** @typedef {{}} Sign_In_Open_PageInputs */
+/** @typedef {{ account: NonNullable<unknown> }} Sign_In_To_Track_UsageInputs */
+/** @typedef {{}} Sign_In_Try_AgainInputs */
+/** @typedef {{}} Sign_In_Use_TerminalInputs */
+/** @typedef {{}} Sign_In_WaitingInputs */
+/** @typedef {{ account: NonNullable<unknown> }} Sign_In_With_AccountInputs */
 /** @typedef {{}} Source_CodeInputs */
 /** @typedef {{}} Source_On_GithubInputs */
 /** @typedef {{}} StaleInputs */
@@ -246,6 +278,7 @@
 /** @typedef {{}} Try_Refresh_In_A_BitInputs */
 /** @typedef {{}} Try_Refresh_In_A_MinuteInputs */
 /** @typedef {{}} Turn_On_A_Provider_In_CustomizeInputs */
+/** @typedef {{}} Turn_One_On_In_CustomizeInputs */
 /** @typedef {{}} UnstarInputs */
 /** @typedef {{}} Unstar_From_Menu_BarInputs */
 /** @typedef {{}} Up_To_2_Stars_Per_ProviderInputs */
@@ -358,6 +391,10 @@ export const add_codex_account = /** @type {(inputs: Add_Codex_AccountInputs) =>
 	return /** @type {LocalizedString} */ (`Codex 계정 추가`)
 };
 
+export const add_one_to_track_usage = /** @type {(inputs: Add_One_To_Track_UsageInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`키를 추가하면 사용량을 추적합니다.`)
+};
+
 export const alert_threshold = /** @type {(inputs: Alert_ThresholdInputs) => LocalizedString} */ () => {
 	return /** @type {LocalizedString} */ (`알림 기준`)
 };
@@ -400,6 +437,34 @@ export const antigravity_not_running = /** @type {(inputs: Antigravity_Not_Runni
 
 export const antigravity_start_hint = /** @type {(inputs: Antigravity_Start_HintInputs) => LocalizedString} */ () => {
 	return /** @type {LocalizedString} */ (`Antigravity 앱이나 agy 세션을 연 뒤 새로 고치세요.`)
+};
+
+export const api_key_checking = /** @type {(inputs: Api_Key_CheckingInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`${i?.provider} 키 확인 중…`)
+};
+
+export const api_key_checking_short = /** @type {(inputs: Api_Key_Checking_ShortInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`확인 중…`)
+};
+
+export const api_key_dialog_title = /** @type {(inputs: Api_Key_Dialog_TitleInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`${i?.provider} 키`)
+};
+
+export const api_key_no_answer = /** @type {(inputs: Api_Key_No_AnswerInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`${i?.provider}가 아직 응답하지 않았습니다. 잠시 후 다시 시도하세요.`)
+};
+
+export const api_key_rejected = /** @type {(inputs: Api_Key_RejectedInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`${i?.provider}에서 이 키를 거부했습니다.`)
+};
+
+export const api_key_save = /** @type {(inputs: Api_Key_SaveInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`저장`)
+};
+
+export const api_key_stored_note = /** @type {(inputs: Api_Key_Stored_NoteInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`config.toml에 저장되며, 본인이만 읽을 수 있습니다.`)
 };
 
 export const api_keys = /** @type {(inputs: Api_KeysInputs) => LocalizedString} */ () => {
@@ -682,6 +747,10 @@ export const goal_now = /** @type {(inputs: Goal_NowInputs) => LocalizedString} 
 	return /** @type {LocalizedString} */ (`현재 목표`)
 };
 
+export const hide_key = /** @type {(inputs: Hide_KeyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`키 숨ingi`)
+};
+
 export const hide_row = /** @type {(inputs: Hide_RowInputs) => LocalizedString} */ () => {
 	return /** @type {LocalizedString} */ (`행 숨기기`)
 };
@@ -826,6 +895,10 @@ export const native = /** @type {(inputs: NativeInputs) => LocalizedString} */ (
 	return /** @type {LocalizedString} */ (`네이티브`)
 };
 
+export const needs_api_key_hint = /** @type {(inputs: Needs_Api_Key_HintInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`API 키가 필요합니다. 키 버튼으로 추가하세요.`)
+};
+
 export const new_update = /** @type {(inputs: New_UpdateInputs) => LocalizedString} */ () => {
 	return /** @type {LocalizedString} */ (`업데이트`)
 };
@@ -854,6 +927,10 @@ export const no_api_key = /** @type {(inputs: No_Api_KeyInputs) => LocalizedStri
 	return /** @type {LocalizedString} */ (`API 키 없음`)
 };
 
+export const no_details_given = /** @type {(inputs: No_Details_GivenInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`세부 정보가 없습니다.`)
+};
+
 export const no_providers_detected = /** @type {(inputs: No_Providers_DetectedInputs) => LocalizedString} */ () => {
 	return /** @type {LocalizedString} */ (`감지된 제공자 없음`)
 };
@@ -880,6 +957,10 @@ export const none = /** @type {(inputs: NoneInputs) => LocalizedString} */ () =>
 
 export const not_checked_yet = /** @type {(inputs: Not_Checked_YetInputs) => LocalizedString} */ () => {
 	return /** @type {LocalizedString} */ (`아직 확인 안 함`)
+};
+
+export const not_signed_in = /** @type {(inputs: Not_Signed_InInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`로그인되지 않음`)
 };
 
 export const notifications = /** @type {(inputs: NotificationsInputs) => LocalizedString} */ () => {
@@ -926,20 +1007,8 @@ export const open_tui = /** @type {(inputs: Open_TuiInputs) => LocalizedString} 
 	return /** @type {LocalizedString} */ (`TUI 열기`)
 };
 
-export const open_tui_for_details = /** @type {(inputs: Open_Tui_For_DetailsInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`자세한 내용은 TUI에서 확인하세요.`)
-};
-
-export const open_tui_settings_to_add_one = /** @type {(inputs: Open_Tui_Settings_To_Add_OneInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`TUI → 설정에서 추가하세요.`)
-};
-
 export const open_tui_settings_to_sign_in = /** @type {(inputs: Open_Tui_Settings_To_Sign_InInputs) => LocalizedString} */ () => {
 	return /** @type {LocalizedString} */ (`TUI → 설정에서 로그인하세요.`)
-};
-
-export const open_tui_settings_to_turn_one_on = /** @type {(inputs: Open_Tui_Settings_To_Turn_One_OnInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`TUI → 설정에서 켜세요.`)
 };
 
 export const options = /** @type {(inputs: OptionsInputs) => LocalizedString} */ () => {
@@ -1158,6 +1227,10 @@ export const show_expiry_dates = /** @type {(inputs: Show_Expiry_DatesInputs) =>
 	return /** @type {LocalizedString} */ (`만료일 보기`)
 };
 
+export const show_key = /** @type {(inputs: Show_KeyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`키 표시`)
+};
+
 export const show_less = /** @type {(inputs: Show_LessInputs) => LocalizedString} */ () => {
 	return /** @type {LocalizedString} */ (`간단히 보기`)
 };
@@ -1178,8 +1251,96 @@ export const show_usage_as_hint = /** @type {(inputs: Show_Usage_As_HintInputs) 
 	return /** @type {LocalizedString} */ (`사용은 쓴 만큼 막대를 채웁니다. 남은 양은 남은 만큼 채웁니다.`)
 };
 
+export const sign_in_asking = /** @type {(inputs: Sign_In_AskingInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`${i?.issuer}에 로그인 코드를 요청하는 중…`)
+};
+
+export const sign_in_cli_missing = /** @type {(inputs: Sign_In_Cli_MissingInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`${i?.provider} 명령줄 도구가 설치되어 있지 않습니다. 설치하거나 터미널에서 로그인하세요.`)
+};
+
+export const sign_in_code_expired = /** @type {(inputs: Sign_In_Code_ExpiredInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`승인되기 전에 코드가 만료되었습니다.`)
+};
+
+export const sign_in_copied = /** @type {(inputs: Sign_In_CopiedInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`복사됨`)
+};
+
+export const sign_in_copy = /** @type {(inputs: Sign_In_CopyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`복사`)
+};
+
+export const sign_in_custom_path = /** @type {(inputs: Sign_In_Custom_PathInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`config.toml이 ${i?.provider}에 별도 로그인 파일을 지정하고 있어 터미널에서 로그인해야 합니다.`)
+};
+
+export const sign_in_denied = /** @type {(inputs: Sign_In_DeniedInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`브라우저에서 로그인이 거부되었습니다.`)
+};
+
+export const sign_in_device_off = /** @type {(inputs: Sign_In_Device_OffInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`이 계정은 기기 로그인이 꺼져 있습니다. ${i?.account} 보안 설정에서 켜거나 터미널에서 로그인하세요.`)
+};
+
+export const sign_in_dialog_title = /** @type {(inputs: Sign_In_Dialog_TitleInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`${i?.provider}에 로그인`)
+};
+
+export const sign_in_done = /** @type {(inputs: Sign_In_DoneInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`${i?.provider}에 로그인됨`)
+};
+
+export const sign_in_enter_code = /** @type {(inputs: Sign_In_Enter_CodeInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`페이지를 열고 이 코드를 입력하세요:`)
+};
+
 export const sign_in_expired = /** @type {(inputs: Sign_In_ExpiredInputs) => LocalizedString} */ () => {
 	return /** @type {LocalizedString} */ (`로그인 만료`)
+};
+
+export const sign_in_expires_in = /** @type {(inputs: Sign_In_Expires_InInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`${i?.time} 후 만료`)
+};
+
+export const sign_in_failed = /** @type {(inputs: Sign_In_FailedInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`로그인하지 못했습니다.`)
+};
+
+export const sign_in_fetching = /** @type {(inputs: Sign_In_FetchingInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`사용량을 가져오는 중…`)
+};
+
+export const sign_in_new_code = /** @type {(inputs: Sign_In_New_CodeInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`새 코드 받기`)
+};
+
+export const sign_in_no_answer = /** @type {(inputs: Sign_In_No_AnswerInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`트레이가 응답하지 않습니다. 닫고 다시 시도하세요.`)
+};
+
+export const sign_in_open_page = /** @type {(inputs: Sign_In_Open_PageInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`페이지 열기`)
+};
+
+export const sign_in_to_track_usage = /** @type {(inputs: Sign_In_To_Track_UsageInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`사용량을 보려면 ${i?.account} 계정으로 로그인하세요.`)
+};
+
+export const sign_in_try_again = /** @type {(inputs: Sign_In_Try_AgainInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`다시 시도`)
+};
+
+export const sign_in_use_terminal = /** @type {(inputs: Sign_In_Use_TerminalInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`터미널 사용`)
+};
+
+export const sign_in_waiting = /** @type {(inputs: Sign_In_WaitingInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`브라우저에서 승인하기를 기다리는 중…`)
+};
+
+export const sign_in_with_account = /** @type {(inputs: Sign_In_With_AccountInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`${i?.account} 계정으로`)
 };
 
 export const source_code = /** @type {(inputs: Source_CodeInputs) => LocalizedString} */ () => {
@@ -1268,6 +1429,10 @@ export const try_refresh_in_a_minute = /** @type {(inputs: Try_Refresh_In_A_Minu
 
 export const turn_on_a_provider_in_customize = /** @type {(inputs: Turn_On_A_Provider_In_CustomizeInputs) => LocalizedString} */ () => {
 	return /** @type {LocalizedString} */ (`사용자화에서 제공자를 켜세요.`)
+};
+
+export const turn_one_on_in_customize = /** @type {(inputs: Turn_One_On_In_CustomizeInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`사용자화에서 하나를 켜세요.`)
 };
 
 export const unstar = /** @type {(inputs: UnstarInputs) => LocalizedString} */ () => {

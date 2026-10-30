@@ -18,6 +18,7 @@
 /** @typedef {{}} Add_Claude_Code_AccountInputs */
 /** @typedef {{}} Add_Claude_Desktop_AccountInputs */
 /** @typedef {{}} Add_Codex_AccountInputs */
+/** @typedef {{}} Add_One_To_Track_UsageInputs */
 /** @typedef {{}} Alert_ThresholdInputs */
 /** @typedef {{}} Alert_Threshold_HintInputs */
 /** @typedef {{}} AlertsInputs */
@@ -29,6 +30,13 @@
 /** @typedef {{}} Always_VisibleInputs */
 /** @typedef {{}} Antigravity_Not_RunningInputs */
 /** @typedef {{}} Antigravity_Start_HintInputs */
+/** @typedef {{ provider: NonNullable<unknown> }} Api_Key_CheckingInputs */
+/** @typedef {{}} Api_Key_Checking_ShortInputs */
+/** @typedef {{ provider: NonNullable<unknown> }} Api_Key_Dialog_TitleInputs */
+/** @typedef {{ provider: NonNullable<unknown> }} Api_Key_No_AnswerInputs */
+/** @typedef {{ provider: NonNullable<unknown> }} Api_Key_RejectedInputs */
+/** @typedef {{}} Api_Key_SaveInputs */
+/** @typedef {{}} Api_Key_Stored_NoteInputs */
 /** @typedef {{}} Api_KeysInputs */
 /** @typedef {{}} AppearanceInputs */
 /** @typedef {{}} AutoInputs */
@@ -99,6 +107,7 @@
 /** @typedef {{}} Global_ShortcutInputs */
 /** @typedef {{}} Global_Shortcut_HintInputs */
 /** @typedef {{}} Goal_NowInputs */
+/** @typedef {{}} Hide_KeyInputs */
 /** @typedef {{}} Hide_RowInputs */
 /** @typedef {{}} HighestInputs */
 /** @typedef {{ hours: NonNullable<unknown> }} Hours_AgoInputs */
@@ -135,6 +144,7 @@
 /** @typedef {{}} Monthly_LowercaseInputs */
 /** @typedef {{}} MoreInputs */
 /** @typedef {{}} NativeInputs */
+/** @typedef {{}} Needs_Api_Key_HintInputs */
 /** @typedef {{}} New_UpdateInputs */
 /** @typedef {{}} New_Version_ReadyInputs */
 /** @typedef {{}} New_Version_UninstallableInputs */
@@ -142,6 +152,7 @@
 /** @typedef {{ duration: NonNullable<unknown> }} Next_Update_InInputs */
 /** @typedef {{}} No_AnswerInputs */
 /** @typedef {{}} No_Api_KeyInputs */
+/** @typedef {{}} No_Details_GivenInputs */
 /** @typedef {{}} No_Providers_DetectedInputs */
 /** @typedef {{}} No_Providers_EnabledInputs */
 /** @typedef {{}} No_Providers_Enabled_HintInputs */
@@ -149,6 +160,7 @@
 /** @typedef {{}} No_Usage_Or_Balance_Data_YetInputs */
 /** @typedef {{}} NoneInputs */
 /** @typedef {{}} Not_Checked_YetInputs */
+/** @typedef {{}} Not_Signed_InInputs */
 /** @typedef {{}} NotificationsInputs */
 /** @typedef {{}} Notify_MeInputs */
 /** @typedef {{}} NowInputs */
@@ -160,10 +172,7 @@
 /** @typedef {{}} Open_CustomizeInputs */
 /** @typedef {{ owner: NonNullable<unknown> }} Open_Source_ByInputs */
 /** @typedef {{}} Open_TuiInputs */
-/** @typedef {{}} Open_Tui_For_DetailsInputs */
-/** @typedef {{}} Open_Tui_Settings_To_Add_OneInputs */
 /** @typedef {{}} Open_Tui_Settings_To_Sign_InInputs */
-/** @typedef {{}} Open_Tui_Settings_To_Turn_One_OnInputs */
 /** @typedef {{}} OptionsInputs */
 /** @typedef {{ percent: NonNullable<unknown> }} Pace_By_ResetInputs */
 /** @typedef {{ duration: NonNullable<unknown> }} Pace_Shows_After_FirstInputs */
@@ -218,12 +227,35 @@
 /** @typedef {{}} Shortcut_Recording_HintInputs */
 /** @typedef {{}} ShowInputs */
 /** @typedef {{}} Show_Expiry_DatesInputs */
+/** @typedef {{}} Show_KeyInputs */
 /** @typedef {{}} Show_LessInputs */
 /** @typedef {{}} Show_MoreInputs */
 /** @typedef {{}} Show_On_DemandInputs */
 /** @typedef {{}} Show_Usage_AsInputs */
 /** @typedef {{}} Show_Usage_As_HintInputs */
+/** @typedef {{ issuer: NonNullable<unknown> }} Sign_In_AskingInputs */
+/** @typedef {{ provider: NonNullable<unknown> }} Sign_In_Cli_MissingInputs */
+/** @typedef {{}} Sign_In_Code_ExpiredInputs */
+/** @typedef {{}} Sign_In_CopiedInputs */
+/** @typedef {{}} Sign_In_CopyInputs */
+/** @typedef {{ provider: NonNullable<unknown> }} Sign_In_Custom_PathInputs */
+/** @typedef {{}} Sign_In_DeniedInputs */
+/** @typedef {{ account: NonNullable<unknown> }} Sign_In_Device_OffInputs */
+/** @typedef {{ provider: NonNullable<unknown> }} Sign_In_Dialog_TitleInputs */
+/** @typedef {{ provider: NonNullable<unknown> }} Sign_In_DoneInputs */
+/** @typedef {{}} Sign_In_Enter_CodeInputs */
 /** @typedef {{}} Sign_In_ExpiredInputs */
+/** @typedef {{ time: NonNullable<unknown> }} Sign_In_Expires_InInputs */
+/** @typedef {{}} Sign_In_FailedInputs */
+/** @typedef {{}} Sign_In_FetchingInputs */
+/** @typedef {{}} Sign_In_New_CodeInputs */
+/** @typedef {{}} Sign_In_No_AnswerInputs */
+/** @typedef {{}} Sign_In_Open_PageInputs */
+/** @typedef {{ account: NonNullable<unknown> }} Sign_In_To_Track_UsageInputs */
+/** @typedef {{}} Sign_In_Try_AgainInputs */
+/** @typedef {{}} Sign_In_Use_TerminalInputs */
+/** @typedef {{}} Sign_In_WaitingInputs */
+/** @typedef {{ account: NonNullable<unknown> }} Sign_In_With_AccountInputs */
 /** @typedef {{}} Source_CodeInputs */
 /** @typedef {{}} Source_On_GithubInputs */
 /** @typedef {{}} StaleInputs */
@@ -246,6 +278,7 @@
 /** @typedef {{}} Try_Refresh_In_A_BitInputs */
 /** @typedef {{}} Try_Refresh_In_A_MinuteInputs */
 /** @typedef {{}} Turn_On_A_Provider_In_CustomizeInputs */
+/** @typedef {{}} Turn_One_On_In_CustomizeInputs */
 /** @typedef {{}} UnstarInputs */
 /** @typedef {{}} Unstar_From_Menu_BarInputs */
 /** @typedef {{}} Up_To_2_Stars_Per_ProviderInputs */
@@ -358,6 +391,10 @@ export const add_codex_account = /** @type {(inputs: Add_Codex_AccountInputs) =>
 	return /** @type {LocalizedString} */ (`Add Codex account`)
 };
 
+export const add_one_to_track_usage = /** @type {(inputs: Add_One_To_Track_UsageInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`Add one to start tracking usage.`)
+};
+
 export const alert_threshold = /** @type {(inputs: Alert_ThresholdInputs) => LocalizedString} */ () => {
 	return /** @type {LocalizedString} */ (`Alert threshold`)
 };
@@ -400,6 +437,34 @@ export const antigravity_not_running = /** @type {(inputs: Antigravity_Not_Runni
 
 export const antigravity_start_hint = /** @type {(inputs: Antigravity_Start_HintInputs) => LocalizedString} */ () => {
 	return /** @type {LocalizedString} */ (`Open the Antigravity app or an agy session, then Refresh.`)
+};
+
+export const api_key_checking = /** @type {(inputs: Api_Key_CheckingInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`Checking the key with ${i?.provider}…`)
+};
+
+export const api_key_checking_short = /** @type {(inputs: Api_Key_Checking_ShortInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`Checking…`)
+};
+
+export const api_key_dialog_title = /** @type {(inputs: Api_Key_Dialog_TitleInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`${i?.provider} key`)
+};
+
+export const api_key_no_answer = /** @type {(inputs: Api_Key_No_AnswerInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`No answer from ${i?.provider} yet. Try again in a moment.`)
+};
+
+export const api_key_rejected = /** @type {(inputs: Api_Key_RejectedInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`${i?.provider} rejected this key.`)
+};
+
+export const api_key_save = /** @type {(inputs: Api_Key_SaveInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`Save`)
+};
+
+export const api_key_stored_note = /** @type {(inputs: Api_Key_Stored_NoteInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`Saved in config.toml, readable only by you.`)
 };
 
 export const api_keys = /** @type {(inputs: Api_KeysInputs) => LocalizedString} */ () => {
@@ -682,6 +747,10 @@ export const goal_now = /** @type {(inputs: Goal_NowInputs) => LocalizedString} 
 	return /** @type {LocalizedString} */ (`Goal now`)
 };
 
+export const hide_key = /** @type {(inputs: Hide_KeyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`Hide key`)
+};
+
 export const hide_row = /** @type {(inputs: Hide_RowInputs) => LocalizedString} */ () => {
 	return /** @type {LocalizedString} */ (`Hide row`)
 };
@@ -826,6 +895,10 @@ export const native = /** @type {(inputs: NativeInputs) => LocalizedString} */ (
 	return /** @type {LocalizedString} */ (`Native`)
 };
 
+export const needs_api_key_hint = /** @type {(inputs: Needs_Api_Key_HintInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`Needs an API key: add it with the key button.`)
+};
+
 export const new_update = /** @type {(inputs: New_UpdateInputs) => LocalizedString} */ () => {
 	return /** @type {LocalizedString} */ (`An update`)
 };
@@ -854,6 +927,10 @@ export const no_api_key = /** @type {(inputs: No_Api_KeyInputs) => LocalizedStri
 	return /** @type {LocalizedString} */ (`No API key`)
 };
 
+export const no_details_given = /** @type {(inputs: No_Details_GivenInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`No details were given.`)
+};
+
 export const no_providers_detected = /** @type {(inputs: No_Providers_DetectedInputs) => LocalizedString} */ () => {
 	return /** @type {LocalizedString} */ (`No providers detected`)
 };
@@ -880,6 +957,10 @@ export const none = /** @type {(inputs: NoneInputs) => LocalizedString} */ () =>
 
 export const not_checked_yet = /** @type {(inputs: Not_Checked_YetInputs) => LocalizedString} */ () => {
 	return /** @type {LocalizedString} */ (`Not checked yet`)
+};
+
+export const not_signed_in = /** @type {(inputs: Not_Signed_InInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`Not signed in`)
 };
 
 export const notifications = /** @type {(inputs: NotificationsInputs) => LocalizedString} */ () => {
@@ -926,20 +1007,8 @@ export const open_tui = /** @type {(inputs: Open_TuiInputs) => LocalizedString} 
 	return /** @type {LocalizedString} */ (`Open TUI`)
 };
 
-export const open_tui_for_details = /** @type {(inputs: Open_Tui_For_DetailsInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Open TUI for details.`)
-};
-
-export const open_tui_settings_to_add_one = /** @type {(inputs: Open_Tui_Settings_To_Add_OneInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Open TUI → Settings to add one.`)
-};
-
 export const open_tui_settings_to_sign_in = /** @type {(inputs: Open_Tui_Settings_To_Sign_InInputs) => LocalizedString} */ () => {
 	return /** @type {LocalizedString} */ (`Open TUI → Settings to sign in.`)
-};
-
-export const open_tui_settings_to_turn_one_on = /** @type {(inputs: Open_Tui_Settings_To_Turn_One_OnInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Open TUI → Settings to turn one on.`)
 };
 
 export const options = /** @type {(inputs: OptionsInputs) => LocalizedString} */ () => {
@@ -1158,6 +1227,10 @@ export const show_expiry_dates = /** @type {(inputs: Show_Expiry_DatesInputs) =>
 	return /** @type {LocalizedString} */ (`show expiry dates`)
 };
 
+export const show_key = /** @type {(inputs: Show_KeyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`Show key`)
+};
+
 export const show_less = /** @type {(inputs: Show_LessInputs) => LocalizedString} */ () => {
 	return /** @type {LocalizedString} */ (`Show less`)
 };
@@ -1178,8 +1251,96 @@ export const show_usage_as_hint = /** @type {(inputs: Show_Usage_As_HintInputs) 
 	return /** @type {LocalizedString} */ (`Used fills the bar with what is spent. Left fills it with what remains.`)
 };
 
+export const sign_in_asking = /** @type {(inputs: Sign_In_AskingInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`Asking ${i?.issuer} for a sign-in code…`)
+};
+
+export const sign_in_cli_missing = /** @type {(inputs: Sign_In_Cli_MissingInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`${i?.provider}'s command-line tool isn't installed here. Install it, or sign in from the terminal.`)
+};
+
+export const sign_in_code_expired = /** @type {(inputs: Sign_In_Code_ExpiredInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`The code expired before it was approved.`)
+};
+
+export const sign_in_copied = /** @type {(inputs: Sign_In_CopiedInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`Copied`)
+};
+
+export const sign_in_copy = /** @type {(inputs: Sign_In_CopyInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`Copy`)
+};
+
+export const sign_in_custom_path = /** @type {(inputs: Sign_In_Custom_PathInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`config.toml points ${i?.provider} at a login file of its own, so sign in from the terminal.`)
+};
+
+export const sign_in_denied = /** @type {(inputs: Sign_In_DeniedInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`The sign-in was turned down in the browser.`)
+};
+
+export const sign_in_device_off = /** @type {(inputs: Sign_In_Device_OffInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`Device sign-in is off for this account. Turn it on in ${i?.account}'s security settings, or sign in from the terminal.`)
+};
+
+export const sign_in_dialog_title = /** @type {(inputs: Sign_In_Dialog_TitleInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`Sign in to ${i?.provider}`)
+};
+
+export const sign_in_done = /** @type {(inputs: Sign_In_DoneInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`Signed in to ${i?.provider}`)
+};
+
+export const sign_in_enter_code = /** @type {(inputs: Sign_In_Enter_CodeInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`Open the page and enter this code:`)
+};
+
 export const sign_in_expired = /** @type {(inputs: Sign_In_ExpiredInputs) => LocalizedString} */ () => {
 	return /** @type {LocalizedString} */ (`Sign-in expired`)
+};
+
+export const sign_in_expires_in = /** @type {(inputs: Sign_In_Expires_InInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`Expires in ${i?.time}`)
+};
+
+export const sign_in_failed = /** @type {(inputs: Sign_In_FailedInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`Couldn't sign in.`)
+};
+
+export const sign_in_fetching = /** @type {(inputs: Sign_In_FetchingInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`Fetching your usage…`)
+};
+
+export const sign_in_new_code = /** @type {(inputs: Sign_In_New_CodeInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`Get a new code`)
+};
+
+export const sign_in_no_answer = /** @type {(inputs: Sign_In_No_AnswerInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`The tray hasn't answered. Close this and try again.`)
+};
+
+export const sign_in_open_page = /** @type {(inputs: Sign_In_Open_PageInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`Open page`)
+};
+
+export const sign_in_to_track_usage = /** @type {(inputs: Sign_In_To_Track_UsageInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`Sign in with your ${i?.account} account to track usage.`)
+};
+
+export const sign_in_try_again = /** @type {(inputs: Sign_In_Try_AgainInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`Try again`)
+};
+
+export const sign_in_use_terminal = /** @type {(inputs: Sign_In_Use_TerminalInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`Use the terminal`)
+};
+
+export const sign_in_waiting = /** @type {(inputs: Sign_In_WaitingInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`Waiting for you to approve it in the browser…`)
+};
+
+export const sign_in_with_account = /** @type {(inputs: Sign_In_With_AccountInputs) => LocalizedString} */ (i) => {
+	return /** @type {LocalizedString} */ (`With your ${i?.account} account`)
 };
 
 export const source_code = /** @type {(inputs: Source_CodeInputs) => LocalizedString} */ () => {
@@ -1268,6 +1429,10 @@ export const try_refresh_in_a_minute = /** @type {(inputs: Try_Refresh_In_A_Minu
 
 export const turn_on_a_provider_in_customize = /** @type {(inputs: Turn_On_A_Provider_In_CustomizeInputs) => LocalizedString} */ () => {
 	return /** @type {LocalizedString} */ (`Turn on a provider in Customize.`)
+};
+
+export const turn_one_on_in_customize = /** @type {(inputs: Turn_One_On_In_CustomizeInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`Turn one on in Customize.`)
 };
 
 export const unstar = /** @type {(inputs: UnstarInputs) => LocalizedString} */ () => {
