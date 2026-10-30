@@ -1,6 +1,40 @@
 ## [Unreleased]
 
+## [1.47.0] — 2026-10-30
+
+### Added
+
+- **Omarchy: a usage priorities view.** Settings → Priorities turns on a
+  second view of the popup that lists every provider in the order worth using
+  it, from `usage --json --priorities`: a card per provider with its state
+  and the projected unused quota, and on hover or click the numbers behind its
+  position. A switcher at the bottom of the panel, or `p`, opens it. An urgent
+  quota (one that resets soon with a large share projected unused) shows in
+  red in the bar even when the optional bar shortcut is off; the thresholds
+  are in the same section. Off by default, and while off the plugin runs the
+  plain `usage --json` and nothing is recorded. A provider hidden from the bar
+  neither alerts nor is recommended there. On a vertical bar the alert is the
+  bar's own icon, and no hidden chip takes clicks.
+
+- **DeepRelay.** The monthly plan's four weighted-token meters — monthly input
+  and output allowance, plus the rolling 7-day caps that slide instead of
+  resetting — from `GET /v1/billing/subscription` (scope `billing:read`), with
+  the per-period dollar usage ceiling, included web searches, and the
+  pay-as-you-go wallet read only for an account that has one or has started
+  billing past the plan. The bar headlines the monthly meter closest to its
+  ceiling; the weekly caps, ceiling and wallet are rows in the report and the
+  tooltip. Key from `DEEPRELAY_API_KEY` or an inline `api_key`.
+
 ### Fixed
+
+- **`--account` error message lists Lyceum.** The validation error for
+  unsupported `--account` providers now includes Lyceum among the
+  accepted API-key account vendors (#545).
+
+- **GNOME Shell 51 and Ptyxis terminal support.** The extension now declares
+  Shell 51 compatibility, opens commands in Fedora's Ptyxis terminal, and
+  restores `~/.local/bin` when GNOME starts preferences with a minimal `PATH`
+  (#550, #551, #552).
 
 - **Google Antigravity `{icon}` placeholder uses the vendor bar icon.**
   The generic `{icon}` placeholder now outputs Antigravity's bar icon (`agy`)
@@ -5178,7 +5212,8 @@ vendors. Highlights:
 - Live API smoke test suite (`make smoke`) that exercises the real
   undocumented endpoints to detect schema drift before users do.
 
-[Unreleased]: https://github.com/akitaonrails/ai-usagebar/compare/v1.46.0...HEAD
+[Unreleased]: https://github.com/akitaonrails/ai-usagebar/compare/v1.47.0...HEAD
+[1.47.0]: https://github.com/akitaonrails/ai-usagebar/compare/v1.46.0...v1.47.0
 [1.46.0]: https://github.com/akitaonrails/ai-usagebar/compare/v1.45.0...v1.46.0
 [1.45.0]: https://github.com/akitaonrails/ai-usagebar/compare/v1.44.0...v1.45.0
 [1.44.0]: https://github.com/akitaonrails/ai-usagebar/compare/v1.43.0...v1.44.0
