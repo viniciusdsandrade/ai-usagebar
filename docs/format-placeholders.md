@@ -24,6 +24,21 @@ reset counts down to the next regeneration tick. `{synthetic_requests}` and
 `{synthetic_limit}` carry the weekly credits used and budget when the plan
 reports them, and expand to an empty string on percentage-only plans.
 
+Mistral (`--vendor mistral`, short name `mis`) supplies
+`{mistral_api_pct}`, `{mistral_api_reset}`, `{mistral_api_elapsed}`,
+`{mistral_api_pace}`, `{mistral_api_pace_indicator}`, `{mistral_vibe_pct}`,
+`{mistral_vibe_reset}`, `{mistral_vibe_elapsed}`, `{mistral_vibe_pace}`,
+`{mistral_vibe_pace_indicator}`, `{mistral_api_budget}`,
+`{mistral_vibe_budget}`, and `{mistral_payg}`, plus the generic `{icon}`,
+`{plan}`, `{vendor_short}`, `{session_pct}`, `{session_reset}`,
+`{session_elapsed}`, `{weekly_pct}`, `{weekly_reset}`, and
+`{weekly_elapsed}`. The session aliases carry the API budget and the weekly
+aliases the Vibe Code budget; both reset on the plan's calendar-month boundary.
+The budget placeholders carry the monthly allowance in the plan's currency;
+`{mistral_payg}` is `on` when either budget is covered by pay-as-you-go. The API
+placeholders expand to an empty string on plans that do not report an
+`api_budget` window.
+
 DeepRelay (`--vendor deeprelay`, short name `drl`) supplies
 `{deeprelay_pct}`, `{deeprelay_reset}`, `{deeprelay_elapsed}`,
 `{deeprelay_pace}`, `{deeprelay_pace_indicator}`,
@@ -64,6 +79,7 @@ slide rather than reset, so every weekly reset placeholder is empty by design.
 | Devin | `dvn` | Cline | `cln` |
 | Muse Code | `msc` | Synthetic | `syn` |
 | Droid | `drd` | DeepRelay | `drl` |
+| Mistral | `mis` | | |
 
 The same codes ride the `ai-usagebar usage --json` report as each entry's
 `short_name`, so a native frontend can draw a Waybar-style provider tag without
@@ -289,6 +305,12 @@ combined monthly pool — so the weekly placeholders (`kimi_weekly_*` and the
 `weekly_pct`/`weekly_reset` aliases) render empty there, and
 `{kimi_monthly_pct}` / `{kimi_monthly_reset}` carry the monthly pool
 instead. On legacy-shape accounts the monthly placeholders render empty.
+The default format follows the shape: newer-shape accounts get
+`5h {kimi_window_pct}% · mo {kimi_monthly_pct}%`. When Kimi reports no rolling
+five-hour window, the window placeholders (`kimi_window_*` and the
+`session_pct`/`session_reset` aliases) render empty, and the default format
+shows only the long window the account has (`7d {kimi_weekly_pct}%` or
+`mo {kimi_monthly_pct}%`).
 
 ## Grok Bot
 

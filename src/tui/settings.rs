@@ -138,6 +138,14 @@ pub const KEY_VENDORS: &[KeyVendor] = &[
         note: "key needs the billing:read scope",
     },
     KeyVendor {
+        id: VendorId::Mistral,
+        label: "Mistral",
+        section: VendorId::Mistral.config_section(),
+        config_key: "api_key",
+        secret_label: "API key",
+        note: "key needs the see_org_inference_usage permission",
+    },
+    KeyVendor {
         id: VendorId::Moonshot,
         label: "Moonshot",
         section: VendorId::Moonshot.config_section(),
@@ -996,7 +1004,7 @@ pub(crate) fn restore_inline_key_snapshot(
         let table = doc
             .entry(vendor.section)
             .or_insert_with(toml_edit::table)
-            .as_table_mut()
+            .as_table_like_mut()
             .ok_or_else(|| {
                 AppError::Other(format!("config.toml: [{}] is not a table", vendor.section))
             })?;
@@ -1012,9 +1020,10 @@ pub(crate) fn restore_inline_key_snapshot(
             .and_then(toml_edit::Item::as_str);
         match &snapshot.key {
             Some(captured) if current_key == Some(candidate) => {
-                let key = toml_edit::Key::new(vendor.config_key)
-                    .with_leaf_decor(captured.key_decor.clone());
-                table.insert_formatted(&key, toml_edit::Item::Value(captured.value.clone()));
+                if let Some((mut key, item)) = table.get_key_value_mut(vendor.config_key) {
+                    *key.leaf_decor_mut() = captured.key_decor.clone();
+                    *item = toml_edit::Item::Value(captured.value.clone());
+                }
             }
             None if current_key == Some(candidate) => {
                 table.remove(vendor.config_key);
@@ -1025,9 +1034,10 @@ pub(crate) fn restore_inline_key_snapshot(
         let current_enabled = table.get("enabled").and_then(toml_edit::Item::as_bool);
         match &snapshot.enabled {
             Some(captured) if current_enabled == Some(true) => {
-                let key =
-                    toml_edit::Key::new("enabled").with_leaf_decor(captured.key_decor.clone());
-                table.insert_formatted(&key, toml_edit::Item::Value(captured.value.clone()));
+                if let Some((mut key, item)) = table.get_key_value_mut("enabled") {
+                    *key.leaf_decor_mut() = captured.key_decor.clone();
+                    *item = toml_edit::Item::Value(captured.value.clone());
+                }
             }
             None if current_enabled == Some(true) => {
                 table.remove("enabled");
@@ -2285,6 +2295,7 @@ mod tests {
             VendorId::Synthetic,
             VendorId::Moonshot,
             VendorId::Grok,
+            VendorId::Mistral,
         ] {
             assert!(
                 KEY_VENDORS.iter().any(|kv| kv.id == id),
@@ -3692,7 +3703,7 @@ enabled = true
         let theme = crate::theme::Theme::default();
         let mut state = blank_state(VendorId::Anthropic);
         state.focus = Focus::Vendor(0);
-        let mut terminal = Terminal::new(TestBackend::new(100, 70)).unwrap();
+        let mut terminal = Terminal::new(TestBackend::new(100, 80)).unwrap();
         let mut hits = Vec::new();
         terminal
             .draw(|f| render(f, f.area(), &mut state, &theme, &mut hits))
