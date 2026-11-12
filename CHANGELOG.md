@@ -2,6 +2,12 @@
 
 ### Fixed
 
+- **macOS menu bar parses Anthropic API named accounts.**
+  `[[anthropic_api.accounts]]` was added to `Config::API_KEY_ACCOUNT_VENDORS` in
+  Rust (#599, #606), but `API_KEY_ACCOUNT_VENDORS` in the macOS menu bar was not
+  updated. It now includes `anthropic_api` so named Console organizations appear
+  in Preferences and the Switch Provider menu, and honors `show_default_account`.
+  A structural guard test ensures the Swift mirror cannot drift from Rust (#608).
 - **macOS:** include Kimi's monthly pool in the native menu bar's quota rows
   and Overview headline. Accounts without a monthly pool and older binary
   output keep their existing session and weekly readings.
