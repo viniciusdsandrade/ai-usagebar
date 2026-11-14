@@ -85,6 +85,14 @@ pub struct Config {
     pub cline: ClineConfig,
     pub deeprelay: DeepRelayConfig,
     pub mistral: MistralConfig,
+    /// Generic macOS Keychain source for vendor API keys: vendor slug (or
+    /// `"vendor.label"` for a named `[[vendor.accounts]]` entry) → the
+    /// *service name* of a login-Keychain generic-password item the user
+    /// created. Consulted only after the env var and the inline `api_key`
+    /// missed, so it never masks either. Off macOS the entries are validated,
+    /// but they are never read and do not count as a configured credential.
+    #[serde(default)]
+    pub keychain: std::collections::BTreeMap<String, String>,
 }
 
 /// UI / dispatch preferences. Currently just `primary` — which vendor the
@@ -2205,9 +2213,9 @@ pub struct CursorConfig {
     pub agent_auth_path: Option<PathBuf>,
 }
 
-/// Kiro CLI reads its quota through the AWS SSO OIDC session kiro-cli already
-/// wrote to its own local `data.sqlite3` — no API key, but (like Cursor) a
-/// real on-disk path that can need overriding.
+/// Kiro CLI reads its quota through the AWS SSO OIDC or social-login session
+/// kiro-cli already wrote to its own local `data.sqlite3` — no API key, but
+/// (like Cursor) a real on-disk path that can need overriding.
 ///
 /// Opt-in like Cursor/DeepSeek/Kilo/etc (`enabled` defaults to `false`):
 /// calls a reverse-engineered CodeWhisperer endpoint via a session token
@@ -3017,6 +3025,28 @@ impl Config {
         VendorId::Lyceum,
     ];
 
+    /// Every vendor whose key resolution goes through
+    /// [`Config::resolve_account_api_key_for`] — the shared chain the
+    /// `[keychain]` table serves: the account-array vendors plus the three
+    /// single-key vendors the widget and TUI route the same way.
+    pub const KEYCHAIN_VENDORS: [VendorId; 15] = [
+        VendorId::AnthropicApi,
+        VendorId::Zai,
+        VendorId::Openrouter,
+        VendorId::Deepseek,
+        VendorId::Deepinfra,
+        VendorId::Kilo,
+        VendorId::Novita,
+        VendorId::Moonshot,
+        VendorId::Grok,
+        VendorId::Minimax,
+        VendorId::OrcaRouter,
+        VendorId::Lyceum,
+        VendorId::Synthetic,
+        VendorId::DeepRelay,
+        VendorId::Mistral,
+    ];
+
     /// The named `[[<vendor>.accounts]]` array, or `None` for a vendor that
     /// has no such array (see [`Self::API_KEY_ACCOUNT_VENDORS`]).
     pub fn api_key_accounts(&self, id: VendorId) -> Option<&[ApiKeyAccount]> {
@@ -3063,6 +3093,25 @@ impl Config {
     /// label for a vendor without the array fails loudly rather than falling
     /// back to the default key, which would show the wrong account's usage.
     pub fn resolve_account_api_key_for(&self, id: VendorId, label: Option<&str>) -> Result<String> {
+        // Off macOS there is no Keychain to ask, so a `[keychain]` entry
+        // changes nothing and the usual missing-key error is returned.
+        let lookup: Option<&KeychainLookup> = if crate::keychain::SUPPORTED {
+            Some(&crate::keychain::read_generic_password)
+        } else {
+            None
+        };
+        self.resolve_account_api_key_for_with(id, label, lookup)
+    }
+
+    /// [`Self::resolve_account_api_key_for`] with the Keychain lookup
+    /// injected, so the `[keychain]` tier is unit-testable without a real
+    /// Keychain (the hermeticity invariant).
+    pub(crate) fn resolve_account_api_key_for_with(
+        &self,
+        id: VendorId,
+        label: Option<&str>,
+        keychain: Option<&KeychainLookup>,
+    ) -> Result<String> {
         // The missing-key error predates `display_name()`; Z.AI's always said
         // "Zai", and its section is derived from this spelling.
         let name = match id {
@@ -3072,7 +3121,10 @@ impl Config {
             other => other.display_name(),
         };
         let Some(label) = label else {
-            return resolve_api_key(name, self.api_key_env_for(id), self.inline_api_key(id));
+            return resolve_api_key(name, self.api_key_env_for(id), self.inline_api_key(id))
+                // Env and inline both missed: the `[keychain]` table's entry
+                // for this vendor's default account is the last source.
+                .or_else(|error| self.keychain_api_key(id.config_section(), keychain, error));
         };
         let slug = id.config_section();
         let account = api_key_account(slug, self.api_key_accounts(id).unwrap_or(&[]), label)?;
@@ -3083,6 +3135,56 @@ impl Config {
             account.api_key_env.as_deref().unwrap_or(""),
             account.api_key.as_deref(),
         )
+        .or_else(|error| {
+            // Same last-resort tier for the named account, keyed
+            // `"vendor.label"` so it can never resolve another account's —
+            // or the default's — key (the issues #14/#15 rule).
+            self.keychain_api_key(&format!("{slug}.{label}"), keychain, error)
+        })
+    }
+
+    /// The `[keychain]` service-name entry for a vendor's default account
+    /// (`label = None`, keyed `<section>`) or a named account (keyed
+    /// `<section>.<label>`), if configured. This only looks at the config
+    /// and reads no Keychain item, so the catalog can count a configured
+    /// entry without spawning `security` at frontend start.
+    pub fn keychain_entry(&self, id: VendorId, label: Option<&str>) -> Option<&str> {
+        let section = id.config_section();
+        match label {
+            Some(label) => self.keychain.get(&format!("{section}.{label}")),
+            None => self.keychain.get(section),
+        }
+        .map(String::as_str)
+    }
+
+    /// The `[keychain]` tier for `key` (`<slug>` or `<slug>.<label>`).
+    ///
+    /// When no entry is declared, or this platform has no Keychain (`lookup`
+    /// is `None`), the caller's `missing` error is returned unchanged, so
+    /// users who did not opt in see what they always saw. A declared entry
+    /// gets a Keychain error in every failing case, because `missing` says
+    /// "export ZAI_API_KEY" and never mentions the table the user
+    /// configured. If the item is absent, the error names the service and
+    /// the command that creates it. A locked Keychain or a denied ACL
+    /// returns the lookup's error as is.
+    fn keychain_api_key(
+        &self,
+        key: &str,
+        lookup: Option<&KeychainLookup>,
+        missing: AppError,
+    ) -> Result<String> {
+        let (Some(service), Some(lookup)) = (self.keychain.get(key), lookup) else {
+            return Err(missing);
+        };
+        match lookup(service)? {
+            Some(value) if !value.is_empty() => Ok(value),
+            _ => Err(AppError::Credentials(format!(
+                "[keychain] {key} names the Keychain item {service:?}, but the login \
+                 Keychain has no generic-password item with that service for account \
+                 $USER. Create it with `security add-generic-password -a \"$USER\" -s \
+                 <service> -w`, or correct the name in config.toml."
+            ))),
+        }
     }
 
     /// The optional OpenRouter *management* key for the default or a named
@@ -3160,6 +3262,40 @@ impl Config {
     /// labels are both CLI selectors and TUI tab identities, so duplicates
     /// would make either destination ambiguous.
     pub fn validate(&self) -> Result<()> {
+        for (key, service) in &self.keychain {
+            if let Err(reason) = crate::keychain::validate_service_name(service) {
+                return Err(AppError::Other(format!(
+                    "[keychain] {key:?}: the Keychain service name {reason}"
+                )));
+            }
+            let (section, label) = match key.split_once('.') {
+                Some((section, label)) => (section, Some(label)),
+                None => (key.as_str(), None),
+            };
+            let Some(id) = Self::KEYCHAIN_VENDORS
+                .into_iter()
+                .find(|id| id.config_section() == section)
+            else {
+                let served: Vec<&str> = Self::KEYCHAIN_VENDORS
+                    .iter()
+                    .map(|id| id.config_section())
+                    .collect();
+                return Err(AppError::Other(format!(
+                    "[keychain] {key:?}: {section:?} is not a vendor section this table \
+                     serves, so the entry would never be read (it serves: {})",
+                    served.join(", ")
+                )));
+            };
+            if let Some(label) = label
+                && !self
+                    .api_key_accounts(id)
+                    .is_some_and(|accounts| accounts.iter().any(|a| a.label == label))
+            {
+                return Err(AppError::Other(format!(
+                    "[keychain] {key:?}: no [[{section}.accounts]] entry labeled {label:?}"
+                )));
+            }
+        }
         if let Some(minutes) = self.tray.refresh_minutes
             && !TRAY_REFRESH_MINUTES.contains(&minutes)
         {
@@ -3359,6 +3495,12 @@ impl Config {
         Ok(())
     }
 }
+
+/// The `[keychain]` reader, passed in so tests never touch a real Keychain.
+/// It takes a service name and returns the item's value, `Ok(None)` when no
+/// such item exists, or `Err` when the Keychain could not answer.
+/// Production uses [`crate::keychain::read_generic_password`].
+pub(crate) type KeychainLookup = dyn Fn(&str) -> Result<Option<String>>;
 
 #[cfg(unix)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -7481,5 +7623,175 @@ enabled = true
             before,
             "an unchanged document must not be rewritten"
         );
+    }
+    /// The `[keychain]` tier: last after env and inline, injected lookup —
+    /// never a real Keychain (the hermeticity invariant).
+    #[test]
+    fn keychain_tier_is_used_only_after_env_and_inline() {
+        let _g = env_guard();
+        let var = "AI_USAGEBAR_TEST_KEYCHAIN_ZAI";
+        unsafe { std::env::remove_var(var) };
+        let mut cfg = Config::default();
+        cfg.zai.api_key_env = var.to_string();
+        cfg.keychain.insert("zai".into(), "MyZaiKey".into());
+
+        let lookup = |service: &str| Ok((service == "MyZaiKey").then(|| "kc-key".to_string()));
+
+        // Neither env nor inline: the Keychain entry resolves.
+        assert_eq!(
+            cfg.resolve_account_api_key_for_with(VendorId::Zai, None, Some(&lookup))
+                .unwrap(),
+            "kc-key"
+        );
+
+        // Inline wins, and the Keychain is not read at all in that case.
+        let unreachable = |_: &str| -> Result<Option<String>> {
+            panic!("the Keychain must not be read when env or inline resolved")
+        };
+        cfg.zai.api_key = Some("inline-key".into());
+        assert_eq!(
+            cfg.resolve_account_api_key_for_with(VendorId::Zai, None, Some(&unreachable))
+                .unwrap(),
+            "inline-key"
+        );
+
+        // Env beats both.
+        unsafe { std::env::set_var(var, "env-key") };
+        assert_eq!(
+            cfg.resolve_account_api_key_for_with(VendorId::Zai, None, Some(&unreachable))
+                .unwrap(),
+            "env-key"
+        );
+        unsafe { std::env::remove_var(var) };
+    }
+
+    /// With no entry, or on a platform without a Keychain, the error text is
+    /// identical to what it was before the `[keychain]` table existed.
+    #[test]
+    fn keychain_tier_is_inert_without_an_entry_or_a_keychain() {
+        let _g = env_guard();
+        let var = "AI_USAGEBAR_TEST_KEYCHAIN_INERT";
+        unsafe { std::env::remove_var(var) };
+        let mut cfg = Config::default();
+        cfg.zai.api_key_env = var.to_string();
+        let expected = resolve_api_key("Zai", var, None).unwrap_err().to_string();
+        let unreachable = |_: &str| -> Result<Option<String>> {
+            panic!("no entry is declared, so nothing may be read")
+        };
+
+        let err = cfg
+            .resolve_account_api_key_for_with(VendorId::Zai, None, Some(&unreachable))
+            .unwrap_err();
+        assert_eq!(err.to_string(), expected);
+
+        // Declared, but off macOS (no lookup): still the historical error.
+        cfg.keychain.insert("zai".into(), "MyZaiKey".into());
+        let err = cfg
+            .resolve_account_api_key_for_with(VendorId::Zai, None, None)
+            .unwrap_err();
+        assert_eq!(err.to_string(), expected);
+    }
+
+    /// A declared entry never falls back to "export ZAI_API_KEY". A missing
+    /// item names the service and the command that creates it, and a locked
+    /// or denied Keychain returns the lookup's error.
+    #[test]
+    fn keychain_tier_failures_name_the_keychain_not_the_env_var() {
+        let _g = env_guard();
+        let var = "AI_USAGEBAR_TEST_KEYCHAIN_MISSING";
+        unsafe { std::env::remove_var(var) };
+        let mut cfg = Config::default();
+        cfg.zai.api_key_env = var.to_string();
+        cfg.keychain.insert("zai".into(), "MyZaiKey".into());
+
+        let err = cfg
+            .resolve_account_api_key_for_with(VendorId::Zai, None, Some(&|_| Ok(None)))
+            .unwrap_err();
+        assert!(matches!(err, AppError::Credentials(_)), "{err}");
+        let text = err.to_string();
+        assert!(text.contains("\"MyZaiKey\""), "{text}");
+        assert!(text.contains("security add-generic-password"), "{text}");
+        assert!(!text.contains(var), "{text}");
+
+        let err = cfg
+            .resolve_account_api_key_for_with(
+                VendorId::Zai,
+                None,
+                Some(&|_| Err(AppError::Credentials("Keychain is locked".into()))),
+            )
+            .unwrap_err();
+        assert!(err.to_string().contains("Keychain is locked"), "{err}");
+    }
+
+    #[test]
+    fn keychain_named_account_gets_only_its_own_entry() {
+        let _g = env_guard();
+        let mut cfg = Config::default();
+        cfg.zai.accounts = vec![ApiKeyAccount {
+            label: "work".into(),
+            api_key_env: None,
+            api_key: None,
+            management_api_key_env: None,
+            monthly_limit: None,
+        }];
+        cfg.keychain.insert("zai".into(), "DefaultZaiKey".into());
+        cfg.keychain.insert("zai.work".into(), "WorkZaiKey".into());
+
+        // Its own entry, never the default account's (issues #14/#15 rule).
+        assert_eq!(
+            cfg.resolve_account_api_key_for_with(
+                VendorId::Zai,
+                Some("work"),
+                Some(&|s| Ok((s == "WorkZaiKey").then(|| "work-key".to_string())))
+            )
+            .unwrap(),
+            "work-key"
+        );
+
+        // Without its own entry, a named account errors — it must not fall
+        // through to the default account's Keychain key.
+        cfg.keychain.remove("zai.work");
+        let err = cfg
+            .resolve_account_api_key_for_with(
+                VendorId::Zai,
+                Some("work"),
+                Some(&|_| Ok(Some("default-key".to_string()))),
+            )
+            .unwrap_err();
+        assert!(err.to_string().contains("account \"work\""), "{}", err);
+    }
+
+    #[test]
+    fn keychain_table_rejects_unknown_sections_and_labels() {
+        let mut cfg = Config::default();
+        cfg.keychain.insert("cursor".into(), "Svc".into());
+        let err = cfg.validate().unwrap_err();
+        assert!(err.to_string().contains("would never be read"), "{}", err);
+
+        let mut cfg = Config::default();
+        cfg.keychain.insert("zai.ghost".into(), "Svc".into());
+        let err = cfg.validate().unwrap_err();
+        assert!(err.to_string().contains("labeled \"ghost\""), "{}", err);
+
+        // These are the names the Add Key dialog refuses too.
+        for bad in ["  ", " Svc", "Svc\n", "S\u{1b}vc"] {
+            let mut cfg = Config::default();
+            cfg.keychain.insert("zai".into(), bad.into());
+            let err = cfg.validate().unwrap_err();
+            assert!(err.to_string().contains("service name"), "{}", err);
+        }
+
+        // A valid default entry and a valid named one both pass.
+        let mut cfg = Config::default();
+        cfg.zai.accounts = vec![ApiKeyAccount {
+            label: "work".into(),
+            api_key_env: Some("AI_USAGEBAR_TEST_KEYCHAIN_WORK".into()),
+            api_key: None,
+            management_api_key_env: None,
+            monthly_limit: None,
+        }];
+        cfg.keychain.insert("zai".into(), "Svc".into());
+        cfg.keychain.insert("zai.work".into(), "SvcWork".into());
+        cfg.validate().unwrap();
     }
 }
