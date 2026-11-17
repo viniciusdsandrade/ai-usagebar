@@ -1,5 +1,22 @@
 ## [Unreleased]
 
+## [1.52.2] — 2026-11-16
+
+### Fixed
+
+- **A retired Anthropic refresh token still fetches the live weekly reading.**
+  When the token endpoint answered 4xx other than 429 (the parser already
+  accepts 400 "Refresh token expired"), the fetch returned before GET usage
+  and served the last cached weekly percent. An empty `refreshToken` already
+  continues with the current access token; a present token the endpoint has
+  retired now does the same. A 429 or a 5xx still stops before that GET (#637).
+
+- **Antigravity:** match local server discovery against the executable basename
+  rather than directory substrings in `/proc/<pid>/exe`, so helper processes
+  installed under `antigravity-*` paths (such as `agy_acp_server.par` and
+  `localharness_external` from `antigravity-acp`) are not probed as language
+  servers or treated as signed-out `401` rejections that block the `agy` CLI and
+  saved-session fallback.
 ## [1.52.1] — 2026-11-14
 
 ### Fixed
@@ -5539,7 +5556,8 @@ vendors. Highlights:
 - Live API smoke test suite (`make smoke`) that exercises the real
   undocumented endpoints to detect schema drift before users do.
 
-[Unreleased]: https://github.com/akitaonrails/ai-usagebar/compare/v1.52.1...HEAD
+[Unreleased]: https://github.com/akitaonrails/ai-usagebar/compare/v1.52.2...HEAD
+[1.52.2]: https://github.com/akitaonrails/ai-usagebar/compare/v1.52.1...v1.52.2
 [1.52.1]: https://github.com/akitaonrails/ai-usagebar/compare/v1.52.0...v1.52.1
 [1.52.0]: https://github.com/akitaonrails/ai-usagebar/compare/v1.51.0...v1.52.0
 [1.51.0]: https://github.com/akitaonrails/ai-usagebar/compare/v1.50.0...v1.51.0
